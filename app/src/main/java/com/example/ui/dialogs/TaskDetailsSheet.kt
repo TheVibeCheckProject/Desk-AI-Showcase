@@ -1,0 +1,475 @@
+package com.example.ui.dialogs
+
+import com.example.ui.theme.DeskTextSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import com.example.data.model.AgentTaskItem
+import com.example.data.model.VideoItem
+import com.example.ui.components.RichText
+import com.example.ui.theme.AmberPending
+import com.example.ui.theme.ElectricCyan
+import com.example.ui.theme.EmeraldConnected
+import com.example.ui.theme.RoseError
+import kotlinx.coroutines.launch
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Locale
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.ui.text.style.TextOverflow
+import com.example.ui.components.StatusNote
+import com.example.ui.components.StatusPill
+import com.example.ui.components.TagChip
+import com.example.ui.components.deskTinted
+import com.example.ui.components.phaseColor
+import com.example.ui.components.phaseLabel
+import com.example.ui.components.relativeTime
+import com.example.ui.theme.Amber300
+import com.example.ui.theme.DeskShapes
+import com.example.ui.theme.NeonIndigo
+import com.example.ui.theme.NeonPurple
+import com.example.ui.theme.Red300
+import com.example.ui.theme.Sky300
+import com.example.ui.theme.Slate200
+import com.example.ui.theme.Slate300
+import com.example.ui.theme.Slate400
+import com.example.ui.theme.Slate500
+import com.example.ui.theme.Slate700
+import com.example.ui.theme.Slate800
+import com.example.ui.theme.Slate900
+import com.example.ui.components.deskSheet
+import com.example.ui.components.deskCard
+
+/**
+ * A mission's details, opened by tapping its card in the Missions list: what was asked, who or what started it,
+ * when it was created, started and finished, the engine, the full result or error, and retries. A video task shows
+ * its thumbnail; while the video is still kept it plays exactly like the Video Hub (same frosted badge, same
+ * VideoPlayerDialog). Fields come from the task JSON (API.md, "Tasks").
+ */
+@Composable
+fun TaskDetailsSheet(
+    task: AgentTaskItem,
+    serverBaseUrl: String,
+    authToken: String,
+    onDismiss: () -> Unit,
+    onRefreshTask: (suspend (String) -> Result<AgentTaskItem>)? = null,
+    onDownloadVideo: (suspend (url: String, destinationFile: File, onProgress: (Long, Long) -> Unit) -> Result<File>)? = null,
+    onPublishVideo: (suspend (filename: String) -> Result<String>)? = null
+) {
+    val scope = rememberCoroutineScope()
+    var current by remember(task.id) { mutableStateOf(task) }
+    var playing by remember { mutableStateOf<VideoItem?>(null) }
+    var note by remember { mutableStateOf<String?>(null) }
+    var showRaw by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+
+    // The list may hold a slimmer copy (the live stream's); fetch the full task once
+    LaunchedEffect(task.id) {
+        val fresh = onRefreshTask?.invoke(task.id)?.getOrNull()
+        if (fresh != null) current = fresh
+    }
+
+    fun absolute(url: String?): String? {
+        val u = url?.trim().orEmpty()
+        if (u.isEmpty()) return null
+        return if (u.startsWith("http://") || u.startsWith("https://")) u
+        else "${serverBaseUrl.trimEnd('/')}/${u.trimStart('/')}"
+    }
+
+    val t = current
+    val isCancelled = t.cancelled || t.phase == "cancelled"
+    val phaseColor = phaseColor(t.phase, isCancelled)
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f)
+                .deskSheet()
+                .padding(16.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(t.title, fontSize = DeskTextSize.xl, fontWeight = FontWeight.Bold, color = Color.White, lineHeight = 22.sp)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            StatusPill(text = phaseLabel(t.phase, isCancelled), color = phaseColor)
+                            val ago = remember(t.completedAt, t.startedAt, t.createdAt) {
+                                relativeTime(t.completedAt ?: t.startedAt ?: t.createdAt)
+                            }
+                            if (ago != null) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                TagChip(text = ago, icon = Icons.Default.Schedule)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("#${t.id}", fontSize = DeskTextSize.xs, color = Slate500, fontFamily = com.example.ui.theme.JetBrainsMono,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                        Box(
+                            modifier = Modifier.size(28.dp).clip(CircleShape).background(Slate800),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Slate400, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // The video: thumbnail kept after pruning; plays like the Video Hub while the video is kept
+                    val thumb = absolute(t.thumbUrl)
+                    val video = absolute(t.videoUrl)
+                    if (thumb != null || t.videoKept != null) {
+                        TaskVideoPreview(
+                            thumbUrl = thumb,
+                            authToken = authToken,
+                            playable = t.videoKept == true && video != null && onDownloadVideo != null,
+                            onPlay = {
+                                if (video != null) {
+                                    val name = t.videoFilename ?: t.result?.filename ?: video.substringAfterLast('/')
+                                    playing = VideoItem(filename = name, sizeMb = 0.0, createdAt = "", url = video,
+                                        thumbnailUrl = thumb ?: "")
+                                }
+                            }
+                        )
+                    }
+
+                    // The numbers at a glance (the Circuit redesign, 2026-10-11): how long, how many steps, AI requests
+                    val stats = listOfNotNull(
+                        durationOf(t.startedAt, t.completedAt)?.let { it to "took" },
+                        t.activityLog.mapNotNull { it.step }.distinct().size.takeIf { it > 0 }?.let { "$it" to if (it == 1) "step" else "steps" },
+                        Regex("(\\d+) AI requests?").find(t.outputSummary ?: "")?.groupValues?.get(1)?.let { it to "AI requests" }
+                    )
+                    if (stats.isNotEmpty()) {
+                        androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                            stats.forEachIndexed { i, (value, label) ->
+                                val c = if (i % 2 == 0) com.example.ui.theme.TerminalGreen else com.example.ui.theme.CeruleanText
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(com.example.ui.theme.DeskShapes.card)
+                                        .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.copy(alpha = 0.14f), com.example.ui.theme.TaskIndigo.copy(alpha = 0.14f))))
+                                        .border(1.dp, c.copy(alpha = 0.55f), com.example.ui.theme.DeskShapes.card)
+                                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                                ) {
+                                    Text(value, color = com.example.ui.theme.PhosphorMint, fontSize = DeskTextSize.xl,
+                                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                         style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(c.copy(alpha = 0.7f), blurRadius = 12f)))
+                                    Text(label, color = Slate400, fontSize = DeskTextSize.xs)
+                                }
+                            }
+                        }
+                    }
+
+                    DetailSection("WHO STARTED IT", accent = NeonPurple) {
+                        DetailText(friendlySource(t.source))
+                    }
+                    DetailSection("WHAT WAS ASKED", accent = ElectricCyan) {
+                        SelectionContainer { DetailText(t.prompt.ifBlank { t.title }) }
+                    }
+                    DetailSection("WHEN", accent = Sky300) {
+                        DetailRow("Created", formatStamp(t.createdAt))
+                        DetailRow("Started", formatStamp(t.startedAt))
+                        DetailRow("Finished", formatStamp(t.completedAt))
+                        durationOf(t.startedAt, t.completedAt)?.let { DetailRow("Took", it) }
+                    }
+                    DetailSection("HOW", accent = NeonIndigo) {
+                        DetailRow("Engine", t.engine)
+                        if (!t.engineUsed.isNullOrBlank() && t.engineUsed != t.engine) DetailRow("Engine used", t.engineUsed)
+                        DetailRow("Priority", t.priority)
+                        DetailRow("Retries", if (t.maxRetries != null) "${t.retryCount} of ${t.maxRetries}" else "${t.retryCount}")
+                        t.exitCode?.let { DetailRow("Exit code", it.toString()) }
+                    }
+                    val summary = t.outputSummary?.trim()
+                    if (!summary.isNullOrBlank()) {
+                        DetailSection(
+                            if (t.needsInput) "NEEDS YOUR INPUT" else "RESULT",
+                            accent = if (t.needsInput) AmberPending else phaseColor,
+                            trailing = {
+                                SmallChip("Copy") {
+                                    clipboard.setText(AnnotatedString(summary))
+                                    note = "📋 Result copied"
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                SmallChip(if (showRaw) "Pretty" else "Raw", active = showRaw) { showRaw = !showRaw }
+                            }
+                        ) {
+                            // Raw: exactly what the server sent, selectable. Pretty: headings, bullets, file chips,
+                            // diffstat colors and branch badges (ui/components/RichText.kt). Both allow long-press copy.
+                            SelectionContainer {
+                                if (showRaw) {
+                                    Text(summary, fontSize = DeskTextSize.xs, color = Slate300, lineHeight = 16.sp,
+                                        fontFamily = com.example.ui.theme.JetBrainsMono)
+                                } else {
+                                    RichText(summary)
+                                }
+                            }
+                        }
+                    }
+                    // A computer task: every step in plain words, warnings and errors marked (2026-10-10)
+                    if (t.activityLog.isNotEmpty()) {
+                        DetailSection(
+                            "WHAT IT DID",
+                            accent = ElectricCyan,
+                            trailing = {
+                                SmallChip("Copy") {
+                                    clipboard.setText(AnnotatedString(com.example.ui.components.activityLogText(t.activityLog)))
+                                    note = "📋 Log copied"
+                                }
+                            }
+                        ) {
+                            SelectionContainer { com.example.ui.components.ActivityLogList(t.activityLog, fontSize = 12) }
+                        }
+                    }
+                    val error = t.lastError?.trim()
+                    if (!error.isNullOrBlank() && error != summary) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .deskTinted(RoseError, fillAlpha = 0.08f)
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("⚠ ERROR", fontSize = DeskTextSize.xs, fontWeight = FontWeight.Bold, color = RoseError,
+                                    letterSpacing = 0.5.sp, modifier = Modifier.weight(1f))
+                                SmallChip("Copy", color = RoseError) {
+                                    clipboard.setText(AnnotatedString(error))
+                                    note = "📋 Error copied"
+                                }
+                            }
+                            SelectionContainer {
+                                if (showRaw) {
+                                    Text(error, fontSize = DeskTextSize.xs, color = Red300, lineHeight = 16.sp,
+                                        fontFamily = com.example.ui.theme.JetBrainsMono)
+                                } else {
+                                    RichText(error, baseColor = Red300)
+                                }
+                            }
+                        }
+                    }
+                    note?.let { StatusNote(it, color = if (it.startsWith("⚠")) Amber300 else Sky300) }
+                }
+            }
+        }
+    }
+
+    // The Video Hub's own player (local cache, then stream)
+    val toPlay = playing
+    if (toPlay != null && onDownloadVideo != null) {
+        VideoPlayerDialog(
+            video = toPlay,
+            onDismiss = { playing = null },
+            onDownloadVideo = onDownloadVideo,
+            onPostTikTok = {
+                if (onPublishVideo != null) scope.launch {
+                    val res = onPublishVideo(toPlay.filename)
+                    note = if (res.isSuccess) "🚀 Queued: posting ${toPlay.filename} to TikTok"
+                    else "⚠️ ${res.exceptionOrNull()?.message ?: "Couldn't queue the TikTok post"}"
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun TaskVideoPreview(thumbUrl: String?, authToken: String, playable: Boolean, onPlay: () -> Unit) {
+    val context = LocalContext.current
+    // Same request as the Video Hub's thumbnails: the token goes in headers, never in the URL
+    val request = remember(thumbUrl, authToken) {
+        thumbUrl?.let {
+            ImageRequest.Builder(context)
+                .data(it)
+                .crossfade(true)
+                .apply {
+                    if (authToken.isNotBlank()) {
+                        addHeader("X-HUD-Token", authToken.trim())
+                        addHeader("Authorization", "Bearer ${authToken.trim()}")
+                    }
+                }
+                .build()
+        }
+    }
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .width(150.dp)
+                .height(266.dp)                     // 9:16, the videos' shape
+                .deskCard()
+                .then(if (playable) Modifier.clickable { onPlay() } else Modifier),
+            contentAlignment = Alignment.Center
+        ) {
+            if (request != null) {
+                SubcomposeAsyncImage(
+                    model = request,
+                    contentDescription = "Video thumbnail",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    loading = {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = ElectricCyan, strokeWidth = 2.dp)
+                        }
+                    },
+                    error = {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Videocam, contentDescription = null, tint = Slate500, modifier = Modifier.size(28.dp))
+                        }
+                    }
+                )
+            } else {
+                Icon(Icons.Default.Videocam, contentDescription = null, tint = Slate500, modifier = Modifier.size(28.dp))
+            }
+            if (playable) FrostedPlayBadge(size = 44.dp)
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = if (playable) "Tap to play" else "Video no longer kept",
+            fontSize = DeskTextSize.xs,
+            color = if (playable) ElectricCyan else Slate400
+        )
+    }
+}
+
+@Composable
+private fun DetailSection(
+    label: String,
+    accent: Color = Slate400,
+    trailing: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .deskCard()
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(accent))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(label, fontSize = DeskTextSize.xs, fontWeight = FontWeight.Bold, color = accent, letterSpacing = 1.sp,
+                modifier = Modifier.weight(1f))
+            if (trailing != null) trailing()
+        }
+        content()
+    }
+}
+
+@Composable
+private fun SmallChip(label: String, color: Color = ElectricCyan, active: Boolean = false, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(DeskShapes.pill)
+            .background(color.copy(alpha = if (active) 0.25f else 0.10f))
+            .border(1.dp, color.copy(alpha = 0.4f), DeskShapes.pill)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 3.dp)
+    ) {
+        Text(label, fontSize = DeskTextSize.xs, fontWeight = FontWeight.SemiBold, color = color)
+    }
+}
+
+@Composable
+private fun DetailText(text: String, color: Color = Slate200) {
+    Text(text, fontSize = DeskTextSize.s, color = color, lineHeight = 17.sp)
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, fontSize = DeskTextSize.xs, color = Slate400)
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(value, fontSize = DeskTextSize.xs, color = Slate200, fontFamily = com.example.ui.theme.JetBrainsMono)
+    }
+}
+
+private fun friendlySource(source: String?): String = when {
+    source.isNullOrBlank() || source == "unknown" -> "Not recorded (older task)"
+    source.startsWith("schedule #") -> "Schedule: ${source.removePrefix("schedule ")}"
+    else -> source
+}
+
+// The server's timestamps are ISO 8601 in its own local time ("2026-10-07T20:00:12.345-05:00"). java.time needs
+// API 26 and the app supports 24, so read the first 19 characters with SimpleDateFormat.
+private fun parseStamp(iso: String?): java.util.Date? {
+    val s = iso?.trim().orEmpty()
+    if (s.length < 19) return null
+    return try {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).parse(s.substring(0, 19))
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun formatStamp(iso: String?): String =
+    parseStamp(iso)?.let { SimpleDateFormat("MMM d, h:mm:ss a", Locale.US).format(it) } ?: "—"
+
+private fun durationOf(start: String?, end: String?): String? {
+    val a = parseStamp(start) ?: return null
+    val b = parseStamp(end) ?: return null
+    val secs = ((b.time - a.time) / 1000).coerceAtLeast(0)
+    return when {
+        secs < 60 -> "$secs s"
+        secs < 3600 -> "${secs / 60} min ${secs % 60} s"
+        else -> "${secs / 3600} h ${(secs % 3600) / 60} min"
+    }
+}

@@ -1,0 +1,361 @@
+package com.example.data.model
+
+data class DaemonStats(
+    val daemonStatus: String = "idle",
+    val overallPhase: String = "idle",
+    val defaultEngine: String = "auto",
+    val lastHeartbeat: String = "",
+    val tasksCompleted: Int = 0,
+    val tasksInProgress: Int = 0,
+    val tasksBacklog: Int = 0,
+    val tasksFailed: Int = 0,
+    val totalHeartbeats: Int = 0,
+    val cpuPercent: Double = 0.0,
+    val ramPercent: Double = 0.0,
+    val tasks: List<AgentTaskItem> = emptyList(),
+    val activeTask: AgentTaskItem? = null
+)
+
+data class TaskProgress(
+    val stage: String = "",       // narration -> capture -> assemble -> send
+    val label: String = "",       // e.g. "Capturing frames"
+    val percent: Int = 0,         // 0..99
+    val detail: String = "",      // e.g. "Frame 480 of 1078"
+    val etaSeconds: Int = 0,      // time left as of updatedAt
+    val updatedAt: String = ""
+)
+
+data class TaskResult(
+    val type: String = "",        // "video"
+    val filename: String = "",
+    val url: String = ""          // resolved against the server URL
+)
+
+/** A draft in the agent's canvas (the chat reply's `canvas`): kind is document or page. */
+data class CanvasRef(
+    val id: Long,
+    val title: String,
+    val kind: String,
+    val version: Int
+)
+
+/** A file or folder from the Repos screen, saved on the phone for the share menu: how many files went in, how many
+ *  were left out (too big; listed inside it). */
+data class SharedDownload(val file: java.io.File, val mime: String, val files: Int, val leftOut: Int)
+
+/** One line of what a computer task did, in plain words ("Opening Notepad", "Pressing Enter"): level is info, ok,
+ *  warn, error or retask. From the View only screen's activity (GET /api/computer/takeover/activity "log") and a finished
+ *  task's "activity_log" (2026-10-10, the owner: see what the agent is doing, and a log with any errors). */
+data class ActivityLine(val time: String, val step: String?, val text: String, val level: String,
+                        val kind: String = "")   // open, type, click, save, plan ("" on older tasks)
+
+/** A credential stored in the host's Windows Credential Manager vault (GET /api/computer/credentials).
+ *  Passwords are never returned over the network. */
+data class StoredCredential(val domain: String, val username: String)
+
+/** A retask: a clean computer run the agent saved, so the SAME task asked again is repeated without the AI. kind is
+ *  "task" (repeated whole) or "info" (repeated up to the reading point; the answer is always read fresh). Written
+ *  text is never repeated, it's written fresh. (GET /api/computer/retasks, 2026-10-11.) */
+data class Retask(val id: String, val goal: String, val kind: String, val steps: Int, val uses: Int, val fails: Int,
+                  val created: String?, val lastUsed: String?)
+
+/** The retasks that fit what was typed after /retask: its whole wording (spacing and capitals aside), or else the
+ *  ones sharing the most words with it ("illinois", "w-9 page"). Empty text: none. */
+fun matchRetasks(all: List<Retask>, typed: String): List<Retask> {
+    fun norm(s: String) = s.lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }.joinToString(" ").trimEnd('.', '!', '?', ' ')
+    val q = norm(typed)
+    if (q.isBlank()) return emptyList()
+    all.firstOrNull { norm(it.goal) == q }?.let { return listOf(it) }
+    val words = q.split(" ").filter { it.length >= 2 }
+    val scored = all.map { r -> r to words.count { norm(r.goal).contains(it) } }.filter { it.second > 0 }
+    val best = scored.maxOfOrNull { it.second } ?: return emptyList()
+    return scored.filter { it.second == best }.map { it.first }
+}
+
+fun parseActivityLog(arr: org.json.JSONArray?): List<ActivityLine> =
+    if (arr == null) emptyList() else (0 until arr.length()).mapNotNull { i ->
+        val o = arr.optJSONObject(i) ?: return@mapNotNull null
+        val text = o.optString("text").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        ActivityLine(o.optString("t"), o.opt("step")?.takeIf { it != org.json.JSONObject.NULL }?.toString(), text,
+                     o.optString("level", "info"), o.optString("kind", ""))
+    }
+
+/** One item of the weekly memory check (GET /api/memory/review): op "add" (a new fact; note = the words it came
+ *  from) or "retire" (an out-of-date fact; note = why). n is what POST /api/memory/review {"keep": [...]} takes. */
+data class MemoryCheckItem(val n: Int, val op: String, val content: String, val note: String? = null)
+
+data class MemoryCheck(val items: List<MemoryCheckItem>)
+
+/** What the agent is doing in the background (the away shift; GET /api/activity and event: activity). */
+data class ActivityState(
+    val active: Boolean = false,
+    val state: String = "",
+    val label: String = "",
+    val step: String = "",
+    val startedAt: Double? = null,
+    val finishedAt: Double? = null,
+    val found: Int = 0
+)
+
+/** A message the agent started itself (GET /api/inbox): kind is brief, notice, suggestion, question, review or
+ *  memory (the Saturday memory check: the chat shows a Review card that opens MemoryCheckSheet).
+ *  canvasJson: a draft card ({"id","title","kind","version"}), e.g. the Sunday growth review.
+ *  why: small italicized explanation of why the message was sent (proactive engine).
+ *  feedback: the user's recorded reaction ("thumbs_up", "thumbs_down", "less_like_this", or null). */
+data class InboxMessage(
+    val id: Long,
+    val kind: String,
+    val text: String,
+    val createdAt: String,
+    val canvasJson: String? = null,
+    val why: String? = null,
+    val feedback: String? = null
+)
+
+data class TaskAction(
+    val label: String = "",
+    val action: String = "",      // "stream", "post", "chat", "cancel", "retry"
+    val url: String? = null,
+    val command: String? = null,
+    val variant: String = "secondary" // "primary", "secondary", "danger"
+)
+
+data class AgentTaskItem(
+    val id: String,
+    val title: String,
+    val prompt: String = "",
+    val phase: String, // backlog, in_progress, completed, failed
+    val engine: String = "auto",
+    val priority: String = "medium",
+    val startedAt: String? = null,
+    val completedAt: String? = null,
+    val outputSummary: String? = null,
+    val lastError: String? = null,
+    val workerPid: Int? = null,
+    val statusText: String? = null,
+    val progress: TaskProgress? = null,
+    val cancelled: Boolean = false,
+    val result: TaskResult? = null,
+    val actions: List<TaskAction> = emptyList(),
+    // Task details (API.md, 2026-10-07): who started it and the rest of the record, shown when a mission is tapped
+    val createdAt: String? = null,
+    val source: String? = null,           // "DeskAI quick dispatch", "Hark", "schedule #1 '…'", "unknown"
+    val engineUsed: String? = null,
+    val retryCount: Int = 0,
+    val maxRetries: Int? = null,
+    val exitCode: Int? = null,
+    val needsInput: Boolean = false,
+    val thumbUrl: String? = null,         // the task's video thumbnail; kept after the video is pruned
+    val videoUrl: String? = null,         // the Video Hub's stream (/videos/…), null once the video is pruned
+    val videoFilename: String? = null,
+    val videoKept: Boolean? = null,       // null: the task has no video
+    val activityLog: List<ActivityLine> = emptyList()   // a computer task: what it did, in plain words
+)
+
+data class MemoryFactItem(
+    val id: Int,
+    val content: String,
+    val category: String = "fact",
+    val importance: Int = 5,
+    val pinned: Boolean = false,
+    val updatedAt: String = "",
+    // Where the agent learned it (GET /api/memory): source chat / hud / images, the owner's words, their message
+    val source: String = "",
+    val evidence: String? = null,
+    val sourceAt: String? = null,
+    val sourceExcerpt: String? = null
+) {
+    /** "From your message on Oct 4: “…”", "Added by you", … or null when the agent doesn't know. */
+    fun origin(): String? {
+        val day = sourceAt?.let { shortDate(it) }
+        val words = evidence?.takeIf { it.isNotBlank() } ?: sourceExcerpt?.takeIf { it.isNotBlank() }
+        return when {
+            words != null && day != null -> "From your message on $day: “$words”"
+            words != null -> "From your words: “$words”"
+            source == "hud" -> "Added by you"
+            source == "images" -> "From an image you shared"
+            else -> null
+        }
+    }
+
+    private fun shortDate(iso: String): String? {
+        val parts = iso.take(10).split("-")
+        if (parts.size != 3) return null
+        val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        val m = parts[1].toIntOrNull() ?: return null
+        val d = parts[2].toIntOrNull() ?: return null
+        return if (m in 1..12) "${months[m - 1]} $d" else null
+    }
+}
+
+/** A learned recipe, "when X, do Y" (GET /api/memory/procedures): how the agent does a kind of job. */
+data class RecipeItem(
+    val id: Int,
+    val area: String,
+    val whenText: String,
+    val doText: String,
+    val source: String = "",
+    val evidence: String? = null,
+    val status: String = "active",
+    val pinned: Boolean = false,
+    val uses: Int = 0,
+    val helped: Int = 0,
+    val failed: Int = 0
+) {
+    val retired: Boolean get() = status == "retired"
+
+    /** Where it came from, in the owner's terms. */
+    fun origin(): String = when (source) {
+        "owner" -> evidence?.takeIf { it.isNotBlank() && it != "Added in DeskAI" }
+            ?.let { "You taught this: “${it.take(120)}”" } ?: "Added by you"
+        "tool" -> "Learned when a tool failed and then worked"
+        "task" -> "Learned from a task that succeeded on retry"
+        else -> "Set up for the agent"
+    }
+
+    /** "Used 5 times · helped 4 · failed 1", or "Not used yet". */
+    fun track(): String = if (uses == 0) "Not used yet" else
+        "Used $uses time${if (uses == 1) "" else "s"} · helped $helped · failed $failed" +
+            if (retired) " · retired (kept failing)" else ""
+}
+
+/** A memory waiting on external event or follow-up, checked daily (GET /api/memory "open_loops"). */
+data class OpenLoopItem(
+    val factId: Int = 0,
+    val content: String = "",
+    val waitingOn: String = "",
+    val checkAfter: String? = null,
+    val checkedAt: String? = null,
+    val askedAt: String? = null
+)
+
+data class MemoryOverview(
+    val profile: String = "",
+    val factsActive: Int = 0,
+    val factsPinned: Int = 0,
+    val messagesCount: Int = 0,
+    val summariesCount: Int = 0,
+    val facts: List<MemoryFactItem> = emptyList(),
+    val recipes: List<RecipeItem> = emptyList(),
+    val past: List<MemoryFactItem> = emptyList(),
+    val openLoops: List<OpenLoopItem> = emptyList()
+)
+
+data class VideoItem(
+    val filename: String,
+    val sizeMb: Double,
+    val createdAt: String,
+    val url: String,
+    val thumbnailUrl: String = ""
+)
+
+data class ImageItem(
+    val filename: String,
+    val sizeMb: Double,
+    val createdAt: String,
+    val url: String
+)
+
+data class TaskProposal(
+    val id: String = "",
+    val token: String = "",
+    val instruction: String,
+    val reason: String = "",
+    val project: String? = null,
+    val expired: Boolean = false,
+    val isLocal: Boolean = false,
+    val state: String = "pending",
+    val kind: String = "task", // task, add_project, computer, email, calendar_event, text, call ...
+    val phone: String? = null  // text/call: {"name","number","body"} as JSON; the phone opens Messages or the dialer
+)
+
+data class ChatQuestion(
+    val id: String = "",
+    val text: String = "",
+    val options: List<String> = emptyList(),
+    val allowOther: Boolean = true,
+    val answeredOption: String? = null
+)
+
+data class AgentWorkProject(
+    val name: String,
+    val description: String = "",
+    val repo: String = ""
+)
+
+data class SystemLogEntry(
+    val id: String = "",
+    val timestamp: String = "",
+    val level: String = "INFO",
+    val message: String = ""
+)
+
+data class PushRegistrationResult(
+    val status: String = "ok",
+    val pushReady: Boolean = false,
+    val message: String = ""
+)
+
+/** A schedule on the agent: a video, a phone reminder or a background task at set times (GET /api/schedules). */
+data class AgentSchedule(
+    val id: Int,
+    val name: String,
+    val kind: String,               // video | reminder | task
+    val cron: String,
+    val description: String,        // plain English, e.g. "weekdays at 08:30"
+    val enabled: Boolean,
+    val nextRunAt: String?,
+    val lastRunAt: String?,
+    val lastResult: String?,
+    val runs: Int,
+    val postToTiktok: Boolean,
+    val text: String?,
+    val instruction: String?,
+    val project: String?
+)
+
+data class ScheduleList(val schedules: List<AgentSchedule>, val timezone: String)
+
+data class SchedulePreview(val valid: Boolean, val description: String, val nextRuns: List<String>, val error: String?)
+
+/**
+ * A watch (the agent's GET /api/watches): told in chat with a push when it happens. Named for its first kind; since
+ * build 108 it's any kind: mail, page (a web address), search (a web search), calendar.
+ */
+data class MailWatch(
+    val id: Int,
+    val source: String,             // gmail | zoho | both
+    val everyEmail: Boolean,        // every new inbox email, bulk mail skipped
+    val sender: String,
+    val subject: String,
+    val words: String,
+    val once: Boolean,
+    val active: Boolean,
+    val matches: Int,
+    val description: String,       // plain English, e.g. "Zoho Mail, sender contains 'pinterest', every time"
+    val lastCheck: String?,
+    val lastMatch: String?,
+    val lastError: String?,
+    val deadline: String?,
+    val note: String?,
+    val kind: String = "mail",      // mail | page | search | calendar
+    val target: String? = null,     // page: the web address; search: what's searched
+    val gone: String? = null,       // page: told when this disappears
+    val ask: String? = null,        // page: the AI check, in plain words
+    val everyMinutes: Int? = null,  // null: the kind's default
+    val leadMinutes: Int? = null    // calendar
+)
+
+data class WatchList(val watches: List<MailWatch>, val everyMinutes: Int)
+
+data class ChatRefineRequest(
+    val text: String,
+    val instruction: String? = null
+)
+
+data class ChatRefineResponse(
+    val success: Boolean = true,
+    val refined: String,
+    val original: String = "",
+    val model: String = ""
+)

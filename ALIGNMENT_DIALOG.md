@@ -1,0 +1,1065 @@
+# DeskAI ↔ AlwaysOnAgent: Alignment & Living Handoff Dialog
+
+**What this is:** DeskAI's changelog and its notes with AlwaysOnAgent (the server it talks to). Both are built from
+the owner's PC; AI Studio was used only to start the app in its first two days, and the earliest entries below were
+written then.
+**Status:** Living document, newest first
+**Last Updated:** 2026-11-03 (DeskAI v2.41.1 / Build 110 shipped — NASA's card back to the normal size)
+
+---
+
+> [!IMPORTANT]
+> ### Inviolable Rules for AlwaysOnAgent & DeskAI Pairing
+> 1. **No Local Android Build Tools:** Never download, install, or run Gradle / Android SDK on this HP EliteDesk Mini PC. This host only runs Python/FastAPI server tasks. DeskAI compilation and debug signing live exclusively on the owner's workstation where `debug.keystore` is stored.
+> 2. **Never Advance `web_dist/version.json` Without the Binary:** `version.json` must always reflect the exact `versionCode` compiled into the committed `DeskAI.apk`. Bumping `version.json` prematurely triggers an infinite update loop on the user's phone.
+
+## Shipped 2026-11-03: DeskAI v2.41.1 (build 110), NASA's card back to the normal size (by the laptop Claude session)
+
+Alex: "I don't like that you made the NASA picture cards so much larger." Build 108's 4:5 frame for NASA's picture
+of the day is gone: every photo card is 220 dp again (`BigCard`). The picture itself stays (the server fix,
+AlwaysOnAgent `de2ae52`, was what made it show). Nothing else changed.
+
+## Shipped 2026-11-03: DeskAI v2.41.0 (build 109), Today's decks (by the laptop Claude session)
+
+Alex: Today was "getting overrun" (14 of 20 cards were daily extras). His design, from previews: trivia and "on
+this day" each a small deck in the feed (120 dp, two cards fanned up and to the right only), with a lit pill for
+what's waiting ("2 to answer", "1 new"); a tap flies the card out of the deck to the centre of the screen (Today
+blurred and dimmed behind, 380 ms; closing plays it backwards; ✕, a tap outside, or Back), swipe between them.
+`ui/today/TodayDecks.kt` (`Deck`, `FannedDeck`, `DeckRow`, `DeckViewer`); `TodayScreen` puts the decks after the first
+story, counts and reads only the feed, and draws the viewer over the blurred list (not a Dialog). Trivia in the deck
+has no second "TRIVIA" label (`showLabel`); "on this day" shows its whole text (`BigCard(fullText)`). Deck cards are
+marked seen when swiped to, not on load (`TodayViewModel`), and trivia right/wrong updates the deck's count at once.
+Server: AlwaysOnAgent `a893f2b` (deck cards off the 20-card cap). Screenshots: `today_screen_decks`, `today_decks`,
+`today_deck_trivia_opening`, `today_deck_trivia_open`, `today_deck_onthisday_open`.
+
+## Shipped 2026-11-03: DeskAI v2.40.0 (build 108), watches for anything; NASA's picture as the card (by the laptop Claude session)
+
+Also: NASA's picture of the day is drawn in a tall 4:5 frame (`BigCard`, `isPicture` by its site "NASA · …") instead
+of the 220 dp strip. Alex: "I didn't know I was even getting NASA's picture of the day ... Make the card the actual
+picture!" The pictures themselves were missing on the server (AlwaysOnAgent `de2ae52`: APOD moved to
+science.nasa.gov); that fix works on older builds too.
+
+Alex: "watches should be for anything I want. Whether it's a website, or anything." The agent's watches gained kinds
+(AlwaysOnAgent `cf18697`: page, search, calendar beside mail; docs/API.md "Watches"). The Watches tab: each card has
+its kind's icon (mail, globe, magnifier, calendar) and title (the mailbox, the page's address, "Search: <words>",
+"Calendar", up to two lines); pages and searches count "Told N". **New watch** starts with **What to watch**:
+Email (as before), Web page (address; tell me when this appears / disappears; an optional AI check in plain words;
+15 min, hourly, 6 h or daily), Search (what to search; hourly, 6 h, daily) or Calendar (events with words; 10 min to
+1 day before). `MailWatch` keeps its name and gains `kind`, `target`, `gone`, `ask`, `everyMinutes`,
+`leadMinutes` (defaults, so an older server's mail-only answer still reads). Screenshots `watches.png`,
+`watch_form.png` (the form with Web page picked, `WatchForm(initialKind)`).
+
+## Shipped 2026-11-03: DeskAI v2.39.0 (build 107), the Watches tab (by the laptop Claude session)
+
+Alex: "a watches viewer, and a way to add a watch manually ... under the schedules card ... both schedule and
+watches under the same card." The Schedules sheet has two tabs, **Schedules | Watches** (`ScheduleTabs`, hidden
+while a form is open). `ui/dialogs/WatchesPanel.kt`: each mail watch (mailbox, what it matches, found count, once,
+follow-up date and what it waits on, last check and last found, a red border and the reason when the last check
+failed) with a two-tap Stop; **New watch**: mailbox (Zoho, Gmail, both), "every new email" (newsletters, promos and
+automated mail skipped), sender / subject / words, only once. Amber, apart from the schedules' cyan. Changing a watch
+stays in chat. Server: AlwaysOnAgent `efae5f9`, `GET/POST /api/watches`, `DELETE /api/watches/{id}` (docs/API.md,
+"Watches"). Tests: `ProactiveParsingTest.parseWatch_readsTheAgentsWatch`, screenshot `watches.png`.
+
+## Shipped 2026-11-01: DeskAI v2.38.2 (build 106), updates come from a public releases repo (by the laptop Claude session)
+
+Alex's plan: this source repo goes private (its history isn't for the public), so releases now live in the public
+`example-org/DeskAI-releases`, which holds only `DeskAI.apk` and `web_dist/version.json`. The app checks
+there first (`UpdateSource.REPOS`), then this repo's two addresses as fallbacks; once this repo is private those
+just answer 404. **Shipping has a new last step:** `python scripts/publish_release.py` (BUILD.md, "Ship" 6).
+`version.json`'s `downloadUrl` names the releases repo. `UpdateSourceTest` covers releases-first and the fallback.
+This repo goes private only after Alex's phone runs build 106. Nothing else changed.
+
+## Shipped 2026-11-01: DeskAI v2.38.1 (build 105), updates survive the repo's move (by the laptop Claude session)
+
+Alex is moving this repo from `example-user/DeskAI` to `example-org/DeskAI`. The update check and the APK
+download now try both homes, newest first (`UpdateSource.REPOS`; `AppUpdaterDialog` uses the same list): before the
+transfer the new address answers 404 and the old one is used, after it the new one answers. So installed apps keep
+their updates whichever happens first. `UpdateSourceTest` covers both cases with a fake GitHub. `version.json`'s
+`downloadUrl` still names the old home (build 104 phones read it); point it at the new home after the transfer,
+and drop `example-user/DeskAI` from `REPOS` once every phone runs build 105 or later. Nothing else changed.
+
+## Shipped 2026-10-29: DeskAI v2.38.0 (build 104), trivia, the running card, readable photo cards (by the laptop Claude session)
+
+- Trivia: the agent (AlwaysOnAgent `524de5b`, core/discover.py) adds a daily "trivia" card from Open Trivia DB; its body
+  is JSON (choices, answer, category, difficulty). `TriviaCard` in TodayScreen: tap a choice, the card reacts
+  "right"/"wrong" (new actions), shows the answer and "N of M this month" (header `trivia.right/answered` ->
+  `TodayHeader.triviaRight/triviaAnswered`). "trivia" added to the recipe's hidden-kind names.
+- "On this day" story cards come from the agent too (no app change). Wikipedia's article of the day was dropped.
+- Chat slice 3: `RunningTaskCard` under the switch while tasks run (polls fetchTasks every 4 s only while the agent
+  says something is running); teal top glow (GlowEmerald/GlowCerulean in Color.kt).
+- Readability: photo cards' gradient starts higher and ends at 90% black, with a text shadow (`PhotoTextShadow`); the
+  Chat/Today switch has a 45% black backing under its glass; Today's list keeps 96 dp at the bottom for the pencil.
+
+## Shipped 2026-10-29: DeskAI v2.37.0 (build 103), the Chat redesign, slices 1-2 (by the laptop Claude session)
+
+From Alex's chat mockup, previewed live on his S22+ over ADB.
+- Messages: `DeskTextSize.chat` (17 sp), line height 25, 10 dp between paragraphs, green 7 dp dot bullets
+  (MarkdownText); more space between messages. The agent's header (small avatar, "AlwaysOnAgent", time) shows only
+  on its first message after a 30-minute pause (`headerKeys` in ChatScreen; `showHeader` on MessageBubble). The
+  owner's bubble shows its time inside, bottom right. Proactive 👍/👎/less-like-this moved from chips under the message
+  into the tap menu.
+- Input (ChatInputBar): round 48 dp glass buttons (mic, attach, hub) left of the text capsule, a round send button
+  (green when there's something to send; stop while streaming). The mic hides while typing.
+- `ChatVideoCard`: a YouTube link in an agent message becomes a 16:9 card (hq720 thumbnail, mqdefault fallback, play
+  button, channel pill) that plays in place with Today's `InlineYouTube`; the bare link is removed from the text.
+- Still to come: the live "running" card under the switch, the teal glow, images/documents opening on tap.
+
+## Shipped 2026-10-29: DeskAI v2.36.0 (build 102), Today's real sky (by the laptop Claude session)
+
+Designed with Alex over ADB on his S22+, preview by preview.
+- `WeatherAtmosphere.kt` is rewritten: an AGSL `RuntimeShader` (Android 13+; a plain gradient with the sun/moon
+  before that) draws a black night with stars, the moon in its real phase (`moonPhase`, maria where the real ones
+  are, earthshine), clouds as fbm noise drifting with the real wind and as many as the real cover, the sun as a warm
+  glow on an arc from the real sunrise to sunset (`skyState`), twilight colours, rain, snow, lightning and fog.
+- The moon is always shown at night (Alex's choice), drifting across the open band above the date (`SKY_BAND`,
+  64 dp, where the recipe bar was). The sun never enters the status bar (the S22+'s camera hole).
+- `TodayWeather` has new fields from the agent (AlwaysOnAgent `6b12fe1`): code, cloud_cover, rain_mm, snow_cm,
+  wind_mph, wind_dir, sunrise, sunset (unix s). Old agents send none: defaults apply.
+- Today's top bar is only the Chat/Today switch (menu, Tasks and the hub stay on Chat). The recipe is a floating
+  pencil button at the bottom; its editor slides up over the keyboard. No sky icon by the temperature.
+- Header: `DeskType.todayDate`/`todayTemp` (32/19 sp); `rememberSkyInk` tints the text with the light and deepens its
+  shadow where the sky behind is bright or the sun passes behind it.
+- Testing hook: `adb shell am start -n <app>/com.example.MainActivity --es sky_preview "hour=21.5,phase=0.3,cloud=60,code=61"`
+  (`SkyPreview`; cold start: new-intent delivery didn't apply it).
+
+## Shipped 2026-10-28: DeskAI v2.35.2 (build 101), Today's videos finally show their picture (by the laptop Claude session)
+
+- The real cause of builds 99-100's sound-without-picture, found over ADB + WebView DevTools on Alex's S22: Compose's
+  `AndroidView` leaves the WebView at WRAP_CONTENT, and a WebView with a wrap_content height gives the page a 0 px
+  tall viewport. YouTube sized `#movie_player` and the `<video>` 411x0. Fix: the WebView gets MATCH_PARENT layout
+  params. The rounded `clip()` was NOT the cause and is back on the playing card (`DeskShapes.media`).
+- `InlineYouTube` now loads YouTube's own embed page (`youtube.com/embed/ID`, Referer header = the app's https
+  origin, against error 153) once attached, instead of an IFrame-API page of ours; an injected watcher calls
+  `DeskAI.error` when `.ytp-error` shows, and the card opens YouTube instead.
+- Lesson for any WebView in Compose: always set MATCH_PARENT layoutParams in the factory.
+
+## Shipped 2026-10-28: DeskAI v2.35.1 (build 100), the in-card video shows its picture (by the laptop Claude session)
+
+- Build 99 played the sound over a black picture: the card's `todayGlassCard` clips to a rounded shape, and a
+  WebView's video isn't composited through a non-rectangular Compose clip. The playing card now has no clip: the
+  page rounds its own corners (`cornerDp`, CSS border-radius over a transparent WebView) and the glass border is
+  drawn over it. Don't wrap `InlineYouTube` in `clip()`.
+- Alex: no bar under the video; every button on the card. The playing card is just the 16:9 video, with Ask,
+  Save and Close as small frosted round icons (`CardIcon`) floating at its top right.
+
+## Shipped 2026-10-28: DeskAI v2.35.0 (build 99), videos play in their Today card (by the laptop Claude session)
+
+- Alex asked for Today's videos to play inside their cards, not in a separate player or the YouTube app. New
+  `ui/today/InlineYouTube.kt`: YouTube's IFrame player in a WebView, loaded with an https origin named after the app
+  (`https://com.aistudio.deskai.kzpwqm`) because YouTube refuses embeds without a referrer (errors 152/153).
+- `BigCard`: tapping a video card swaps its picture for the 16:9 player (autoplay), with the title, channel and a
+  Close pill under it. One video plays at a time (`playing` in `Edition`); scrolling it away or closing it stops the
+  sound (the WebView is destroyed); the app going to the background pauses it.
+- A video whose channel blocks embedding (player errors 101/150, or any error) closes the player and opens the
+  link in YouTube, as before. Taps on the player's title or logo also open YouTube.
+- Fullscreen: the player's own button puts the video over the whole window in landscape; back out restores it.
+- Agent side (AlwaysOnAgent `f520446`): channels are read through YouTube's Data API (`YOUTUBE_API_KEY`), then the
+  RSS feed, then the /videos page; card links are still `https://www.youtube.com/watch?v=<id>`.
+
+## Shipped 2026-10-27: DeskAI v2.28.0 (build 87), files from the Mini in chat (by the laptop Claude session)
+
+- The agent's new `mini_files` chat tool (AlwaysOnAgent `69f34f6`, `54e829f`; read only) shows a file as a markdown
+  line. Images are `![name](/api/files/m/…)`, through the existing `MarkdownImage`. Video, audio and PDF are
+  `[▶ name (12 MB)](/api/files/m/…)` (🔊 audio, 📄 PDF), now `MarkdownElement.Media` → `ui/components/MarkdownMedia.kt`.
+- **The media card:** on tap it downloads into `cache/media/` with the token in a header (own server only), shows
+  progress, then opens the phone's own player or viewer through the FileProvider (`Intent.ACTION_VIEW`). A file
+  already downloaded opens at once.
+- Ordinary `[text](link)` lines stay text (`MarkdownMediaParseTest`).
+
+## Shipped 2026-10-27: DeskAI v2.27.0 (build 86), audit fixes (by the laptop Claude session)
+
+From AlwaysOnAgent's `docs/AUDIT_2026-10-27.md`, the owner's go-ahead:
+- **S1, the Vault:** opens with Android's BiometricPrompt (`ui/components/DeviceUnlock.kt`: BIOMETRIC_STRONG or
+  DEVICE_CREDENTIAL on Android 11+, WEAK or DEVICE_CREDENTIAL before). The custom pattern lock is gone
+  (`PatternLockView.kt` deleted; its "Reset" worked from the locked screen) and its stored hash is removed on first
+  open. `MainActivity` is a `FragmentActivity` now (BiometricPrompt needs one); fragment 1.8.5 is pinned beside
+  biometric 1.1.0. **Don't undo.**
+- **S5, the token:** encrypted at rest with an Android Keystore AES-GCM key (`data/local/TokenCipher.kt`), in Room
+  (`BridgeConfigDao` seals and opens it, so callers are unchanged) and in the `desk_ai_credentials` prefs copy (it was
+  plain text in both). The database and those prefs are out of cloud backup and device transfer
+  (`res/xml/backup_rules.xml`, `data_extraction_rules.xml`); on a new phone, enter the token again.
+- **S4, HTTPS:** `BridgeConfig.TAILNET_HTTPS` = `https://agent-mini.example.ts.net` (`tailscale serve` on the
+  Mini). https addresses are tried first; the old `http://100.64.0.1:8080` remote upgrades itself. The home LAN
+  address stays as the plain-HTTP fallback when the phone's Tailscale is off.
+- **R6:** the updater refuses a download whose size differs from `version.json`'s `fileSizeBytes`.
+- **T5:** chat sends only what the agent reads (no `system`, `prompt` copy or 10-message `history`).
+- Server side the same day: `/api/chat` answers each `turn_id` once, so the app's failover resend can't make a
+  double reply.
+
+## Shipped 2026-10-27: DeskAI v2.26.2 (build 85), native pattern lock and the first-touch drag fix (by the laptop Claude session)
+
+- **First touch didn't drag:** `PatternLockView`'s `pointerInput` was keyed on the drawing state, so touch-down
+  (which sets `DRAWING`) restarted the gesture coroutine and cancelled the drag. Now keyed on `enabled` only; the
+  success/error check happens at touch-down, and callbacks go through `rememberUpdatedState`. **Don't undo.**
+- **Lag:** every finger move redrew hundreds of honeycomb hexagons and nine gradient dials, rebuilt per frame.
+- **Look:** replaced with a stock-Android style (owner's ask: "look a little more native"): theme-colored dots
+  that pop with a spring and halo when touched, a thin primary-colored line, red on error, no background of its own.
+- Server side the same day (AlwaysOnAgent `b68e36a`): the chat's `look_into` background helper; nothing DeskAI must
+  change (its answers arrive as ordinary proactive inbox messages).
+
+## Shipped 2026-10-26: DeskAI v2.26.0 (build 83), Host Credentials Vault & 9-Dot Pattern Lock
+
+- **9-Dot Pattern Lock Security (`PatternLockView`)**: Custom Compose 3x3 drag-gesture canvas with Circuit aesthetic (ElectricCyan glowing nodes, connecting trace lines, and haptic feedback). Protects the credential vault without requiring master tokens or access keys.
+- **Pattern Setup & Verification**: Auto-detects uninitialized lock, guiding user through setup (min 4 dots) and confirmation. Persists salted SHA-256 hash in secure SharedPreferences. Provides reset mechanism.
+- **Credentials Vault Sheet (`CredentialsVaultDialog`)**: Displays accounts saved in the host's Windows Credential Manager. Supports deleting accounts and manually adding new credentials (with password visibility toggle).
+- **Automated Computer Use Auto-Save (`AgentComputerUse` & `AlwaysOnAgent`)**:
+  - When an automation task encounters a sign-in form (e.g. `agent@example.com`), entering the password during Takeover or Needs You automatically persists the credentials into the host's DPAPI vault.
+  - Zero password leakage: passwords are never sent in LLM context, chat turns, or GET API responses.
+- **Command Deck Hub Integration (`CommandPaletteDialog`)**: Added "Credentials" tile under "The Mini" group with live count of saved accounts.
+- **Tests**: Added `PatternLockHelperTest` unit tests verifying hash determinism, uniqueness across distinct patterns, and salt variance.
+
+## Shipped 2026-10-26: DeskAI v2.25.0 (build 82), Chat flow bugfixes & robustness improvements
+
+- **Stopped reply handling**: Tapping Stop cancels the streaming coroutine, which previously bypassed Room persistence because Room refuses to run on cancelled contexts. A `NonCancellable` block now reliably saves partial text (or "⏹️ Stopped") and marks status `stopped`, removing the infinite thinking indicator.
+- **Startup sweep for interrupted replies**: Added `ChatDao.markInterruptedReplies` called in `ChatViewModel.init` so any reply cut off by app exit/crash transitions cleanly out of `sending` state.
+- **Client turn state reset**: Previously `lastReceivedTaskId`, `lastReceivedProposals`, etc. were only cleared on successful response completion. If a message errored or was stopped, residual state leaked into subsequent chat turns. Now `resetTurnState()` clears per-turn artifacts at the start of every stream.
+- **History sanitization**: `ChatRepository.historyForAgent` filters out `sending`, `error`, and `stopped` messages before sending context to AlwaysOnAgent, preventing client-side error wrappers and partial interrupted text from polluting LLM context.
+- **Tapped answers & command chips draft preservation**: `sendMessage(textOverride)` no longer clears active user input or attachments when sending chip actions or multiple-choice answers.
+- **Multiple-choice question safety**: `answerQuestion` ensures `sendMessage` succeeded before updating the message state in Room, avoiding questions being marked as answered when the bridge is busy streaming another reply.
+- **Session title & drawer handling**: New chats starting as `Mission #N` are properly retitled based on the first prompt; deleting a non-active session from the drawer no longer forces a session switch; session title changes update the top bar reactively.
+- **Scroll & FAB visibility**: `ChatScreen` now computes `lastItemIndex` and `showScrollToBottom` using `chatEntries` (folded rows) rather than raw message counts, preventing the scroll-to-bottom FAB from sticking while at the bottom of the list.
+- **Tests**: Added `ChatRepositoryChatTest` with 5 automated unit tests covering cancellation, turn state isolation, interrupted reply sweeping, history filtering, and session title rules.
+
+## Shipped 2026-10-16: DeskAI v2.24.0 (build 81), Enhance: undo, typing guard, failure notice (Claude)
+
+- **Undo**: after Enhance replaces the draft, the ✨ button shows Undo until the text is edited; tapping it restores the draft. The enhancer can change meaning (in testing, "push it" for git became posting a video).
+- **Typing guard**: the refined text is applied only if the box still holds the draft that was sent; typing during the wait wins.
+- **Failure notice**: a toast when the agent answers `model: "raw"` (every model failed; its `success` stays true) or the call fails. Before, the spinner just stopped.
+- No AlwaysOnAgent change needed: the `/api/chat/refine` contract is unchanged.
+
+## Shipped 2026-10-14: DeskAI v2.23.0 (build 80), Prompt enhance button in chat box & AlwaysOnAgent refine integration
+
+- **✨ Enhance Prompt button in ChatInputBar**: When user enters text into the message box, an AutoAwesome ✨ button appears next to the Send button. Tapping it triggers `POST /api/chat/refine` on AlwaysOnAgent.
+- **Loading & State**: While refining, the button morphs smoothly into a circular loading indicator and prevents duplicate submissions.
+- **Client & Remote Layer**: Added `refineChatText` in `AlwaysOnAgentClient` and `ChatRepository`, exposed via `ChatViewModel.refineInputText()`.
+- **Backend pairing**: AlwaysOnAgent (`c1b3366`) serves `/api/chat/refine` backed by CloudLLM (`gemini-3.5-flash-lite`).
+- **Build & Verification**: Compiled with Gradle on workstation, verified debug keystore signature.
+
+## Shipped 2026-10-13: DeskAI v2.22.0 (build 79), Proactive assistant UI & away shift integration (by the laptop Claude session)
+
+- **Away shift background activity indicator**: Top-bar pulsing icon appears when the away shift runs on the desktop/mini (`event: activity` over SSE, snapshot via `GET /api/activity`). Tapping the icon opens `BackgroundWorkSheet` displaying the active phase, current step, and found ideas count.
+- **Proactive message 'why' & reaction feedback**: Messages synced from `/api/inbox` now persist and display the italicized `why` line explaining the signal behind the proactive message. Added interactive reaction chips (👍, 👎, "less like this") which post to `POST /api/inbox/{id}/feedback` and auto-update candidate outcome on the agent.
+- **Memory screen: Waiting on & Past versions**: `MemorySheet` adds "⏳ Waiting on" section displaying active open loops and daily check cadence, and "📜 Past versions" section for retired or updated facts.
+- **Data models & Room DB migration**: Added `ActivityState` and `OpenLoopItem` models, added `why`, `inboxKind`, `inboxId`, and `feedback` to `ChatMessage` with Room `MIGRATION_6_7` (DB version 7).
+- Tests: Added `ProactiveParsingTest` for activity events, inbox parsing, and open loops. All unit tests passing (`testDebugUnitTest`).
+
+## Shipped 2026-10-13: DeskAI v2.21.0 (build 78), /render chest|bottle and the Apply update chip (by the laptop Claude session)
+
+- **`/render [chest|bottle] [quote]`** (and `/video`, `/tiktok` with a scene word first) sends `scene` to
+  `POST /api/trigger_media` (AlwaysOnAgent `a7cd236`, docs/API.md mirrored). Without one, TiktokVideos takes turns
+  between the treasure chest and the new message in a bottle. Only a first word that is a scene counts.
+- **A finished task waiting for a tap keeps its card** (`TaskFolding.awaitsTap`): "apply task-189" twice came back
+  folded into a one-line row (build 71's folding), and a tap opened the details, which have no chips, so nothing
+  could be applied from the app. The newest message about a finished task with a primary endpoint chip (⚡ Apply
+  update, 🚀 Push live, 🔁 Try again) shows its full card even with tasks hidden; once live it folds like the rest.
+  Tests: `TaskFoldingTest`. The agent's side of the same incident: AlwaysOnAgent `3fd1cf5`.
+
+## Shipped 2026-10-11: DeskAI v2.20.2 (build 77), Repos jobs get their chat card (by the laptop Claude session)
+
+- The Repos screen's banner said "Its card shows the progress", but starting a job there (`POST /api/github/work`) never added a chat message, so the job only showed in the Tasks list (the owner noticed while recording the demo).
+- `ReposScreen(onStarted = ...)` is called with the task id, repo and instruction; `ChatViewModel.repoWorkStarted()` inserts an assistant message with `linkedTaskId`, so the job gets the same live card (and folding) as every other task.
+
+## Shipped 2026-10-11: DeskAI v2.20.1 (build 76), phone contacts for texts and calls (by the laptop Claude session)
+
+- The owner's contacts live on the phone, not in Google Contacts ("Sam Rivera (New Number)" was never found). The agent now sends a Text/Call card with `number: ""` when Google doesn't have the person.
+- `READ_CONTACTS` (asked on first use). `util/PhoneContacts.numbersFor(name)` (display name LIKE %name%, else the first word; each number once, with its type label). `ProposalCard`: one number opens straight away; several show a picker (label · number); none, or the permission refused, opens Messages/the dialer with no recipient.
+
+## Shipped 2026-10-11: DeskAI v2.20.0 (build 75), texts and calls (by the laptop Claude session, the owner's ask)
+
+- API (docs/API.md, synced): proposal kinds `text` and `call` carry `phone: {name, number, body}`. The agent drafts (contact looked up via Connectors); the phone does it.
+- `TaskProposal.phone` (JSON string), parsed in `AlwaysOnAgentClient`, kept in `ChatMessage` (get/serializeProposals).
+- `ProposalCard`: kind text shows "💬 Text" and **Open in Messages** (`ACTION_SENDTO smsto:` + `sms_body`); kind call shows "📞 Call" and **Call** (`ACTION_DIAL tel:`); then `onRun()` posts the run (the agent only records it was opened). Done state: "Opened in Messages ✓" / "Opened the dialer ✓". Nothing is sent by the app or the agent: the owner sends.
+- Not tried end to end on the phone before shipping (would need a chat message as the owner).
+
+## Shipped 2026-10-11: DeskAI v2.19.0 (build 74), task details: stat tiles and a colored log (by the laptop Claude session, the owner's ask: "basically all white text")
+
+- API: a computer task's `activity_log` lines now carry `kind`: open, type, click, save, plan, or "" (docs/API.md, synced). The tool sets it (AgentComputerUse activity.kind_of); the agent keeps it.
+- `ActivityLine.kind`; `ActivityLog.kt`: an `info` line is colored by its kind (`kindColor`: open CeruleanText, type lime #9DFF3A, save teal #2EE6B8, plan dimmed Slate500, click/other Slate200) with a mark (↗ ⌨ ⤓); other levels keep their colors (warn, error, ok, retask). `ActivityLogList` adds a legend of the colors present.
+- `TaskDetailsSheet`: stat tiles at the top: took, steps (distinct steps in the log), AI requests (when the result says so).
+- Checked on the owner's phone with a fresh task (task-168).
+
+## Shipped 2026-10-11: DeskAI v2.18.1 (build 73), bigger status buttons (by the laptop Claude session, the owner's ask)
+
+- `AgentStatusBar`: the Tasks, Memory and Videos buttons are 44 dp tiles with 24 dp icons, tinted and edged in their menu colors (amber, green, purple).
+
+## Shipped 2026-10-11: DeskAI v2.18.0 (build 72), the menu regrouped, fewer buttons (by the laptop Claude session, the owner's asks)
+
+- `CommandPaletteDialog`: tiles grouped under Your agent (Tasks, Memory, Retasks, Schedules), Make (Videos, Repos, AgentWork) and The Mini (Take over + View only, Connection, Maintenance), labels via `HubGroup`. `WorkstationCard(detail = ...)` shows a live detail instead of OPEN: tasks running/waiting (new `stats` param), retasks saved and the next schedule (fetched on open via `onFetchRetasks`/`onFetchSchedules`). The updater bar and the commands footer use the circuit texture with gradient edges.
+- Removed at the owner's ask ("a bit overkill"): the Standby/Wake button and the settings gear in `AgentStatusBar`, and the top bar's three-dot button (both only opened the Connection Hub, which is in the menu). /standby and /wake still work.
+- Checked on the owner's phone over adb.
+
+## Shipped 2026-10-11: DeskAI v2.17.0 (build 71), tasks folded in chat (by the laptop Claude session, the owner's ask: "the chat is basically nothing but tasks")
+
+- `components/TaskFolding.kt` (new): `foldChat()` turns the messages into `ChatEntry`s: a finished task's message (assistant + linkedTaskId, task completed/failed/cancelled) becomes a `TaskRow` (one line: mark, title, finish time; tap opens TaskDetailsSheet); 2+ finished in a row fold into a `TaskStrip` ("N tasks finished", tap to show/hide); a running or not-yet-known task stays the full message with its live card. `TasksToggle` in the top bar hides task messages (prefs `deskai_ui`/`hide_tasks`).
+- `ChatScreen`: the list renders `foldChat(...)`; task states come from `viewModel.getTask`, re-checked every 6 s for unfinished ones (last 30).
+- Checked on the owner's phone over adb (strip, Show/Hide, toggle off/on).
+
+## Shipped 2026-10-11: DeskAI v2.16.1 (build 70), hex pattern in the menu tiles (by the laptop Claude session, the owner's ask)
+
+- `WorkstationCard`: `circuitTexture(glow = 0.45f)` is the tile's base (the same hex circuit as the background; solid, so the glow only shows outside), with the tile's own color washed over it.
+
+## Shipped 2026-10-11: DeskAI v2.16.0 (build 69), the Circuit look part 1 (by the laptop Claude session, the owner's design pick)
+
+- The owner chose "Circuit" from a preview: glowing terminal green (#39FF6A) with DEEP cerulean (#0077B6; text tint #1E90D0), a hex circuit texture, and black lightning. Please keep this direction.
+- `Color.kt`: the existing names keep working, their values moved: ElectricCyan is terminal green, the slate scale is green-tinted (light slates are mint text), Cyan400/Sky300/Blue500 are the cerulean text tint, Blue600 (the user's bubble) is deep cerulean. New: TerminalGreen, Cerulean, CeruleanText, PhosphorMint, CircuitBlack. CardGradient is see-through so the texture shows. `Theme.kt` dark scheme follows.
+- `components/CircuitBackground.kt` (new): `Modifier.circuitTexture()` (hex pattern, cerulean nodes, corner glows, scanlines) and `CircuitBackground()` (texture + black lightning: a cerulean flash and a thick black bolt with a thin cerulean rim every 2.6-6.8 s; only while RESUMED; off when ANIMATOR_DURATION_SCALE is 0). Behind the chat screen (Scaffold and top bar see-through).
+- `DeskUi.kt`: `deskSheet()` draws the texture (no lightning) with a green-to-cerulean edge; `deskCard()` glows in its border color; `SheetHeader` titles are mint with a green glow.
+- Task cards (`LiveTaskCard`): running/finished cards use deep cerulean into TaskIndigo (#4D5BFF) for the edge, fill and progress bars, so tasks stand apart from the green chat (the owner's ask). Failed stays red.
+- The menu (`CommandPaletteDialog`): circuit texture, green-to-cerulean frame; `WorkstationCard` tiles glow in their own color into cerulean (a solid base under the glow: a see-through tile showed the shadow as a box). `deskCard()` has no glow for the same reason (its fill is see-through to show the texture).
+- Checked on the owner's phone over adb before shipping (texture, glow and a lightning strike captured).
+
+## Shipped 2026-10-11: DeskAI v2.15.0 (build 68), slash commands off the hub, /retask (by the laptop Claude session, at the owner's request)
+
+- `data/model/SlashCommands.kt` (new): every slash command in ONE list (category, usage, description, template, run). The pop-up, the Commands list and /help's text are built from it. Added /task and /restart (the agent handles them; they were in neither list) and /retask.
+- `SlashCommandsSheet.kt` (new): `SlashCommandsSheet` (grouped, searchable; RUN sends, USE fills the chat box) and `SlashSuggestions` (the pop-up above the chat box while a command is typed: "/" shows all, narrows by prefix). /?, /help and /commands open the sheet instead of being sent.
+- `/retask`: typing "/retask " shows the saved retasks above the chat box (fetched then), narrowing by words (`matchRetasks`); a tap sends `/retask <its wording>`, which the client runs via the agent's new `POST /api/computer/retasks/{id}/run` (the task card follows). `/retask <words>` sent directly runs the one best match, or lists the matches.
+- `CommandPaletteDialog`: the slash command list and its search bar (it only searched commands) are gone; a line plus a Commands button opens the sheet. `CommandEntry`/`CommandItemRow` removed.
+- `ChatInputBar`: the cursor goes to the end when the text is set from outside (a picked command); placeholder "type / for commands".
+- Not tried on the phone before shipping.
+
+## Shipped 2026-10-11: DeskAI v2.14.0 (build 67), Retasks (by the laptop Claude session, at the owner's request)
+
+- Retasks: a clean computer run the agent saved, so the SAME task asked again (same wording) is repeated without the AI. Answers are read fresh (a question repeats up to the reading point), writing is written fresh. API: `GET /api/computer/retasks`, `DELETE /api/computer/retasks/{id}` (docs/API.md, synced).
+- `RetasksSheet.kt` (new, styled like SchedulesSheet): a card per retask (wording, whole task or up to the reading point, steps, uses, times off course, saved/last used), two-tap delete. Opened from the menu's new Retasks card (after Schedules). Model `Retask`; client `getRetasks`/`deleteRetask` (via scheduleCall).
+- `ActivityLog.kt`: a new level `retask` (Violet300, mark ↻) for the tool's retask lines: saved as a retask, repeating one, each repeated step. A replay going off course stays `warn`. Used by the task card's "What it did" and View only's narration.
+- Not tried on the phone before shipping.
+
+## Shipped 2026-10-11: DeskAI v2.13.2 (build 66), View only fixes (by the laptop Claude session, at the owner's request)
+
+- `TakeOverScreen.WatchFullScreen`: no keyboard in View only (focus cleared, keyboard hidden on the way in, rechecked for 1.6 s and on every tap; SOFT_INPUT_STATE_ALWAYS_HIDDEN while open, restored on leaving).
+- `NeedsYouSheet`: only when the phone is sideways (View only is the only landscape screen): screenshot at most a third of the screen's height, Send arrow inside the answer/password box and ImeAction.Send, imePadding on the sheet. Upright it's unchanged (the owner: the problem was only in View only).
+- Not tried on the phone before shipping.
+
+## Shipped 2026-10-10: DeskAI v2.13.1 (build 65), Save to Downloads in Repos (by the laptop Claude session, at the owner's request)
+
+- The owner: Gemini isn't in the share menu. Repos' button is now Share / save: one dialog (a folder: one text file or zip), then Share… or Save to Downloads. `saveToDownloadsFolder` writes Downloads/DeskAI through MediaStore (Android 10+, no permission), with the type from the extension so MediaStore keeps the name; Android 9 and older: the app's own Download folder.
+- Not tried on the phone before shipping.
+
+## Shipped 2026-10-10: DeskAI v2.13.0 (build 64), share from Repos (by the laptop Claude session, at the owner's request)
+
+- Agent side: `GET /api/github/download?repo&path&format=zip|text|raw` (docs/API.md synced), made by the Connectors tool.
+- `AlwaysOnAgentClient.githubDownload` saves the file under its own name (Content-Disposition) in `cacheDir/share_out/` (cleared before each share) and picks a share type: zip, or text/plain for anything textual (AI chat apps take text/plain). `ReposScreen` has Share file / folder / repo beside Work on this; a folder asks "One text file" or "Zip"; the FileProvider URI goes to ACTION_SEND with read permission.
+- Not tried on the phone before shipping.
+
+## Shipped 2026-10-10: DeskAI v2.12.0 (build 63), computer tasks narrate in plain words (by the laptop Claude session, at the owner's request)
+
+- Agent/tool side: AgentComputerUse `activity.say()`; `GET /api/computer/takeover/activity` has `log`; tasks have `activity_log` (docs/API.md synced).
+- `ActivityLine` + `parseActivityLog` (AlwaysOnModels.kt); `ui/components/ActivityLog.kt` (one line, the list, Copy text). `TakeOverScreen.WatchFullScreen` shows `NarrationPanel` bottom left (goal + newest 3 lines, tap for all, kept scrolled to the newest). `TaskDetailsSheet` has "WHAT IT DID" with Copy.
+- Not tried on the phone before shipping.
+
+## Shipped 2026-10-10: DeskAI v2.11.0 (build 62), the weekly memory check (by the laptop Claude session, at the owner's request)
+
+- Agent side: `core/memory_review.py`, inbox kind `memory` (Saturdays), `GET/POST /api/memory/review` (docs/API.md synced).
+- `ChatRepository.syncInbox` labels kind `memory` as `MEMORY_CHECK_LABEL`; `MessageBubble` shows `MemoryCheckCard` under a message with that label; it opens `ui/dialogs/MemoryCheckSheet.kt`, a checklist where every item starts ticked. Save posts the kept numbers. Answering in chat ("keep 1 and 3") works too.
+- Not tried on the phone before shipping (no check is waiting until one is sent).
+
+## Shipped 2026-10-10: DeskAI v2.10.0 (build 61), Share to agent (by the laptop Claude session, at the owner's request)
+
+- New `ShareReceiverActivity` (no UI, translucent, excluded from recents) receives ACTION_SEND (text, images, video, PDF, Word) and ACTION_SEND_MULTIPLE (images, PDFs). It copies each shared file into `cacheDir/shared/` at once (the read permission is only its own, and short-lived), hands the text and copies to `SharedInbox`, and brings `MainActivity` forward (NEW_TASK|CLEAR_TOP|SINGLE_TOP, extra SHARED_TO_AGENT). `ChatScreen` (`sharedTick`) passes it to `ChatViewModel.acceptShared`: the text joins the message box, the files go through the usual `attachFile` upload. Nothing is sent until the owner taps Send. Up to 5 files.
+- Not tried on the phone before shipping (it wasn't connected).
+
+## Shipped 2026-10-10: DeskAI v2.9.1 (build 60), task details from the chat (by the laptop Claude session, at the owner's request)
+
+- Tapping a task card in the chat (not its buttons) opens `TaskDetailsSheet`, the same sheet as tapping the task in Missions (`LiveTaskCard.onOpenDetails`, `ChatScreen.chatTaskDetails`). Not tried on the phone before shipping (it wasn't connected).
+
+## Shipped 2026-10-10: DeskAI v2.9.0 (build 59), task cards for every task; Run & View only; landscape View only (by the laptop Claude session, at the owner's request)
+
+- **Every task gets a card in the chat** (`ChatRepository.syncTaskCards`, called from the stats loop, so within seconds): a task no message links to yet gets an assistant message "📋 <source> started a task: <title>" with its live card. Message id `taskcard-<task id>` (never twice); a 6 s grace lets the app's own cards come first; tasks whose source starts with "DeskAI chat" are skipped (the reply brings their card); the first run starts from the newest task (no flood of old ones). New DAO query `countMessagesForTask`.
+- **Run & View only** on computer-task suggestion cards (`ProposalCard.onRunAndWatch`): runs it and opens Take over in View only. Running computer tasks' cards get a **View only** button (`LiveTaskCard.onWatch`).
+- **View only is landscape and full screen** (`TakeOverScreen.WatchFullScreen`): sensor-landscape, system bars hidden, the picture fills the display (pinch to zoom), a tap shows the bar (what the run is doing, Close) for a few seconds; leaving restores the orientation. `MainActivity` now handles orientation/screen-size changes itself (`android:configChanges`), so rotating doesn't recreate the activity and close Take over.
+- Not tried on the phone before shipping (it wasn't connected); compiled and signed with the usual key.
+
+## Shipped 2026-10-08: DeskAI v2.8.3 (build 58), Take over shows running task & status (by Antigravity session, at owner's request)
+
+- Set `versionCode = 58` and `versionName = "2.8.3"` in `app/build.gradle.kts`.
+- Take over shows the running task and what it's doing.
+- Rebuilt debug APK signed with debug keystore and synced to `DeskAI.apk`, `DeskAI-update.apk`, and `web_dist/DeskAI.apk`.
+- Updated OTA update manifest `web_dist/version.json`.
+
+## Shipped 2026-10-08: DeskAI v2.8.2 (build 57), View only mode in Take over (by Antigravity session, at owner's request)
+
+- Pulled `example-user/DeskAI` `main` (`fb7f056`).
+- `TakeOverScreen.kt`: Added a "View only" checkbox mode to Take over, allowing the owner to watch real-time computer use runs without sending input or interrupting the active task.
+- `CommandPaletteDialog.kt` & `ChatScreen.kt`: Cleaned up action handlers and dialog interactions.
+
+## Shipped 2026-10-07: DeskAI v2.8.1 (build 56), Media URL security & signing isolation (by Antigravity session, at owner's request)
+
+- Applied `scripts/deskai_patches/security.patch` (2 commits).
+- Security fix: Token removed from media URLs. In-app media (chat images, Media Hub photos/videos/thumbnails) loaded exclusively with Authorization header. External sharing, browser viewing, and external players obtain signed, time-limited expiring URLs via `POST /api/media/link`.
+- Keystore & signing isolation: Stopped tracking `DeskAI-source.zip` and `web_dist/DeskAI-source.zip` (removed from disk). `debug.keystore` moved to `~/.deskai/debug.keystore` outside repository tree. Signing settings sourced cleanly from `local.properties` / environment variables.
+
+## Shipped 2026-10-07: DeskAI v2.8.0 (build 55), App-wide visual polish & design system (by Antigravity session, at owner's request)
+
+- Applied `scripts/deskai_patches/beautify-all.patch` (7-commit series).
+- `ui/theme` & `ui/components/DeskUi.kt`: Added shared color palette tokens, typography scale, spacing and shape tokens, plus unified card/sheet surfaces (`deskSheet`, `deskCard`).
+- Visual styling overhaul across all screens:
+  - Chat: gradient message bubbles, live connection status indicator in top bar, refined empty chat state.
+  - Missions: status-colored left border accent, status pills, readable short results, timestamp and source chips.
+  - Task Details: clean structured layout with status headers and rich output.
+  - Maintenance: colored log levels, tag pills, interactive test push status with colored transition.
+  - Schedules, Memory, Media Hub tabs, Needs-you, AgentWork, Repos, Connection Hub, Updater, Command Deck, image viewer, and canvas all updated with consistent theme tokens and elevated surfaces.
+
+## Shipped 2026-10-07: DeskAI v2.7.1 (build 54), Readable mission results & maintenance logs (by Antigravity session, at owner's request)
+
+- Applied `scripts/deskai_patches/beautify.patch`.
+- `RichText.kt`: Lightweight dependency-free parser and Compose renderer for agent output (headings, bullets, bold, code pills, clickable web links, file path chips, tag pills, diffstat green/red, git unpushed/pushed status badges).
+- `TaskDetailsSheet.kt`: Mission results displayed with RichText formatting along with Copy and Raw/Pretty view toggle chips; error output highlighted in rose-tinted container with dedicated Copy chip.
+- `MaintenanceSheet.kt`: Server logs parsed and styled per refresh (dimmed timestamps, colored log levels ERR/WARN/INFO/DBG, tag pills, tinted rows for errors/warnings).
+- Added `RichTextParserTest` JVM unit tests.
+
+## Shipped 2026-10-07: DeskAI v2.7.0 (build 53), Mission details & video thumbnail playback (by Antigravity session, at owner's request)
+
+- Applied `scripts/deskai_patches/task-details.patch` (AlwaysOnAgent PR #5 companion).
+- `TasksSheet.kt`: Cards in Missions list are now tappable to open detailed inspection.
+- `TaskDetailsSheet.kt`: Shows task source, full prompt, created/started/completed timestamps, elapsed duration, engine/engine used, retries, exit code, and complete output or error.
+- Video tasks display server-kept thumbnails (`thumb_url`) with `FrostedPlayBadge`. Tapping plays via `VideoPlayerDialog`; pruned videos display "Video no longer kept".
+- `MediaGallerySheet.kt`: Extracted `FrostedPlayBadge` into a reusable composable.
+- Updated `docs/API.md` mirrored from AlwaysOnAgent.
+
+## Shipped 2026-10-07: DeskAI v2.6.9 (build 52), Live task events from /api/events SSE stream (by Antigravity session, at owner's request)
+
+- Applied `scripts/deskai_patches/live-events.patch` (AlwaysOnAgent PR #4 companion).
+- `MainActivity.kt`: Lifecycle hooks `onStart()` / `onStop()` manage `TaskEvents` connection so SSE stream only consumes network/battery while app is foregrounded.
+- `AlwaysOnAgentClient.kt`: Added `streamTaskEvents()` listening to `GET /api/events` (`text/event-stream`) with dedicated 45s silence timeout and ping tracking.
+- `TaskEvents.kt`: Foreground SSE manager with exponential backoff retry (2s–60s) and coroutine change counters (`awaitChange`, `awaitAnyChange`).
+- `LiveTaskCard.kt`: Task cards update immediately when a server task event arrives (`TaskEvents.awaitChange`), falling back cleanly to 2s polling if stream is offline.
+- `ChatViewModel.kt`: Status bar and daemon stats refresh immediately on task updates; inbox sync decoupled to 60s wall-clock interval.
+- FCM push messaging remains untouched for background alerts. Tested and verified on physical device via ADB.
+
+## Shipped 2026-10-06: DeskAI v2.6.8 (build 51), Video Hub thumbnails (by Antigravity session, at owner's request)
+
+- `MediaGallerySheet.kt`: Added `VideoGalleryCard` featuring extracted video thumbnails (60dp x 86dp, 9:16 ratio) loaded via Coil `SubcomposeAsyncImage` with token auth headers, dark rounded border, and frosted glass play circle badge overlay. Polished title with 2-line ellipsis and metadata row with monospace size and date. Added quick "▶ Watch" and "🚀 Post TikTok" action chips.
+- `AlwaysOnModels.kt`: `VideoItem` has `thumbnailUrl: String = ""`.
+- `AlwaysOnAgentClient.kt`: `getVideos()` extracts `thumbnail_url` from backend (falling back to `/api/videos/$fname/thumbnail`) and attaches auth token.
+- `AlwaysOnAgent` backend (`interfaces/hud/media.py`): Added `thumbnail_url` to `GET /api/videos` and added `GET /api/videos/{filename}/thumbnail` endpoint generating 360px JPEG thumbnails on-demand via FFmpeg and caching in `.thumbnails/`.
+
+## Shipped 2026-10-06: DeskAI v2.6.7 (build 50), Take over redesign (by the laptop Claude session, at the owner's request)
+
+- `TakeOverScreen.kt`: top = Mini/Laptop chips, "You're in control" with the last action, a round check button (hand back). Bottom = one icon bar: stop (hand back), keyboard, tap, 2x (double), drag, scroll up/down, zoom out (only when zoomed). Typing is hidden until the keyboard button: then the special keys and the text bar show right above the phone's keyboard (focused, so it opens), and closing the keyboard hides them. Modelled on a remote-desktop screenshot the owner sent. Not tried on the phone before shipping (unplugged).
+
+## Shipped 2026-10-06: DeskAI v2.6.6 (build 49), videos centred in the player (by the laptop Claude session)
+
+- `MediaGallerySheet.kt` `VideoPlayerDialog`: the VideoView gets `Gravity.CENTER` in its FrameLayout. VideoView shrinks itself to the video's shape and sat at the top-left, so a video taller than the frame (the owner's full-screen phone recording) had all the black on the right. Sizing is unchanged (MATCH_PARENT); checked on the owner's phone before shipping: a TikTok render fills the frame exactly as before, the recording is centred.
+
+## Shipped 2026-10-06: DeskAI v2.6.5 (build 48), Repos (by the laptop Claude session, at the owner's request)
+
+- New `ui/dialogs/ReposScreen.kt`, opened from the command deck's **Repos** card: the owner's GitHub repos (both accounts, filterable) -> folders -> a file's text (monospace, selectable). **Work on this** takes an instruction (with the folder or file being viewed) and calls `POST /api/github/work`; the agent registers the repo with AgentWork by itself when it isn't a project yet. Back goes up one level.
+- Drawn in the activity (not a Dialog), like Take over: pop-ups don't get keyboard insets on the owner's phone.
+- Plumbing: `AlwaysOnAgentClient.githubCall` (uses `scheduleCall`), `ChatRepository.github`, `ChatViewModel.github`. API contract: `docs/API.md` "Repos".
+
+## Shipped 2026-10-06: DeskAI v2.6.4 (build 47), Take over without a pop-up window
+
+- Builds 45-46 tried to make the Dialog's window resize for the keyboard; on the owner's phone it never did (46 was worse). `TakeOverScreen` is no longer a Dialog: it's drawn in the activity (edge-to-edge, so the keyboard's insets arrive), over the chat, with `BackHandler` = Hand back. Owner's design: two containers, the computer's screen (weight 1, shrinks) and the controls panel pinned under it, with `imePadding()` on the column.
+
+## Shipped 2026-10-06: DeskAI v2.6.3 (build 46), Take over keyboard
+
+- Build 45's `decorFitsSystemWindows = false` + `imePadding()` wasn't enough on the owner's phone (screenshot: the keyboard still covered the text box and keys). The dialog's own window (via `DialogWindowProvider`) is now set to `SOFT_INPUT_ADJUST_RESIZE`, `WindowCompat.setDecorFitsSystemWindows(w, false)` and MATCH_PARENT, so the keyboard's insets reach the layout.
+
+## Shipped 2026-10-06: DeskAI v2.6.2 (build 45), Take over layout
+
+- `TakeOverScreen`: the Dialog uses `decorFitsSystemWindows = false` and its Column `systemBarsPadding().imePadding()`. With the default the window never got the keyboard's or navigation bar's insets, so the text box and Send sat under them (the owner could barely see them even with the keyboard closed).
+
+## Shipped 2026-10-06: DeskAI v2.6.1 (build 44), Take over the laptop
+
+- `TakeOverScreen`: a Mini / Laptop switch in the top bar (not shown when opened from a Needs you request: those are the Mini's). Every call carries `machine` (docs/API.md "Take over" → "Which computer"); switching stops the old machine and starts the new one; the frame is `/api/computer/takeover/frame?machine=...`. The agent passes laptop calls to the laptop's own Take over (started at its login, Tailscale only); 503 when the laptop isn't answering.
+
+## Shipped 2026-10-06: DeskAI v2.6.0 (build 43), Take over
+
+- `ui/dialogs/TakeOverScreen.kt`: full-screen dialog. `POST /api/computer/takeover/start` (with the request id when opened from a Needs you request), then the frame (`GET .../frame`, JPEG) every 0.6 s; taps on the picture map to 0..1 coordinates in the picture's own space (the pointerInput sits after the zoom graphicsLayer, so pinch-zoom doesn't throw taps off); hold = right-click; Double / Drag one-shot modes; scroll, text and key buttons. Hand back or leaving the screen calls `stop` (the agent answers the request with `__handed_back__`, the task looks again). Entry points: the command palette card "Take over" and "Take over and do it yourself" on every Needs you card. The owner tested the same flow as a web page on the laptop first and found it fast.
+- `data/remote/UpdateSource.kt`: the badge (ChatScreen) and AppUpdaterDialog both read version.json, and download the APK, at the newest commit (GitHub API `commits/main`, Accept `application/vnd.github.sha`), because GitHub's raw cache served the previous version.json for minutes after a release (badge said update, screen said up to date). Falls back to the plain raw URL.
+
+## Shipped 2026-10-06: DeskAI v2.5.3 (build 42), tappable links
+
+- `MarkdownText.buildStyledInlineMarkdown` handled only bold and code, so a web address in a chat message was plain text, and chat text can't be long-pressed to copy. Now `appendWithLinks` turns `[label](https://...)` and bare `http(s)://` addresses into `LinkAnnotation.Url` links (underlined, sky blue), opened by Text itself.
+
+## Shipped 2026-10-06: DeskAI v2.5.2 (build 41), task results shown
+
+- The owner never saw the weekly numbers: the agent's `status_text` for a finished task is always "Completed", and both `LiveTaskCard` and `TasksSheet` showed `statusText ?: outputSummary`, so `output_summary` (the report, a computer task's answer) was never displayed.
+- `LiveTaskCard`: under the status line, a completed or failed task's `outputSummary` in full (selectable; over 24 lines it collapses with Show all). `TasksSheet`: its first 6 lines under the status, tap to expand.
+
+## Shipped 2026-10-06: DeskAI v2.5.1 (build 40), sign-ins
+
+- New request kind `secret` (docs/API.md "Computer tasks: Needs you"): a password or code. `NeedsYouSheet` shows a hidden (password) field with Show/Hide and blocks screenshots on the sheet (`SecureFlagPolicy.SecureOn` whenever a secret is listed); the field is cleared on Send. The notification has no reply box for it (a RemoteInput shows what's typed), only "Type it in DeskAI", which opens the sheet. The tool types the value into the outlined box; the AI never sees it. Please keep it that way: never put a secret in a notification, a log or the chat.
+- On a sign-in page a `choice` request can offer `Type my password` next to the page's own options (`Try another way`).
+- `needs_you_cancel` push (c758b7d): removes the request's notification when it was answered elsewhere or its task ended.
+
+## Shipped 2026-10-05: DeskAI v2.5.0 (build 39), Needs you
+
+- AgentComputerUse (a new tool on the Mini, agent engine `computer`) waits for the owner instead of stopping; the agent pushes `type: needs_you` on `channel: needs_you` (docs/API.md "Computer tasks: Needs you").
+- `service/NeedsYou.kt`: its own loud channel (alarm sound, strong vibration), the screenshot fetched with the token and shown as BigPicture, answer actions in the notification (Approve/Deny, up to 3 choices, or a RemoteInput reply) handled by `NeedsYouReceiver` (POST /api/computer/requests/{id}/answer). Stays until answered; reminders replace it and alert again.
+- `ui/dialogs/NeedsYouSheet.kt`: what's waiting, with screenshot, site, question and answers; opened from the notification (`OPEN_NEEDS_YOU`) or a banner in the chat (`ChatViewModel.needsYou`, polled every 20 s).
+
+## Shipped 2026-10-05: DeskAI v2.4.10 (build 38), Stop cancels the reply on the agent too
+
+- Owner's case: they stopped a reply and retyped. The agent still finished the old reply and stored it, so a stale answer landed in its history.
+- `ChatViewModel` gives each send a `turnId` (UUID). `/api/chat` carries it as `turn_id`. `stopStreaming()` calls `ChatRepository.cancelChat(turnId)` → `POST /api/chat/cancel` (agent e6a8a27).
+- `AlwaysOnAgentClient`: the chat call goes through `awaitResponse()` (enqueue + `suspendCancellableCoroutine`, so cancelling aborts the OkHttp call; `execute()` blocked until the reply). `executeWithFailover` rethrows `CancellationException` instead of trying the next address.
+- docs/API.md synced from the agent (Stop section).
+
+## Shipped 2026-10-05: DeskAI v2.4.9 (build 37), images in chat
+
+- Owner's report: the chip's thumbnail stayed blank, the bubble only showed "📎 name", and a file sent without text showed "What's in this file?" as if they'd typed it.
+- Cause of the blank thumbnail: the agent sends `thumb_b64` as a `data:` URI, which Coil 2.7 can't load. `ChatAttachment.thumbModel()` now gives Coil the phone's copy (File) or the decoded bytes (ByteBuffer).
+- Picked images are saved at most 1280 px, upright (EXIF), in `filesDir/chat_images/<localId>.jpg` (`ChatAttachment.localPath`).
+- New column `chat_messages.attachmentsJson` (Room v6, MIGRATION_5_6): `[{name, kind, path}]`, via `MessageAttachment`. `MessageBubble` draws images (tap = full screen) and other files as an icon row.
+- The user message stores only the typed text; `ChatRepository` sends the agent "What's in this file?" when it's blank. `ChatMessage.historyText()` puts "[attached: name]" in the history for file-only messages.
+
+## Shipped 2026-10-05: DeskAI v2.4.8 (build 36), Restart reports when it's done
+
+- Owner's report: after Restart in the Maintenance sheet the status said "restarting" forever.
+- `restartAgent` shows the agent's own answer (`message`; `status: "draining"` = it waits for a running task, shown with ⏳). New `getAgentUptime` (GET /api/status). The sheet polls every 3 s until the agent is online with an uptime shorter than the time since the tap (3 min, or 32 min while draining), then shows "✅ Back online" or a warning, and refreshes the logs.
+
+## Shipped 2026-10-04: DeskAI v2.4.7 (build 35), learned recipes
+
+- Agent side (AlwaysOnAgent `10c3c90`, `60cf693`): procedural memory. `GET/POST /api/memory/procedures`, `PATCH/DELETE /api/memory/procedures/{id}` (docs/API.md, synced here).
+- App: `RecipeItem` (origin(), track()); `getMemoryOverview` also loads the recipes (empty from an older agent); the Memory sheet has a RECIPES section above the facts: "When X:" / what to do / where it came from / area and track record, with pin, restore (retired ones) and delete. No redesign.
+
+## Shipped 2026-10-04: DeskAI v2.4.6 (build 34), where each memory came from
+
+- Agent side (AlwaysOnAgent `560eb33`): each fact in `/api/memory` has `source`, `evidence` and `source_message` {id, at, excerpt}.
+- App: `MemoryFactItem` parses them; `origin()` makes the line under each fact in the Memory sheet ("From your message on Sep 24: ...", "Added by you"). No redesign.
+
+## Shipped 2026-10-04: DeskAI v2.4.5 (build 33), draft cards on the agent's own messages
+
+- Agent side (AlwaysOnAgent `bf31b1e`, `449f0eb`): the Sunday growth review. `GET /api/inbox` messages can carry `canvas` ({"id","title","kind","version"}, the same shape as a chat reply's), and a new kind `review`.
+- App side (laptop Claude Code session): `InboxMessage.canvasJson`, parsed from `canvas`; the inbox sync stores it on the `agent-<id>` chat message, so the existing `CanvasCard` in `MessageBubble` shows it; the label "📊 Weekly review". No UI redesign.
+
+## Shipped 2026-10-04: DeskAI v2.4.4 (build 32), the full profile in the Memory sheet
+
+- The owner couldn't read the profile (it was a banner capped at 8 lines). It's now the first item of the sheet's scrolling list, a "🧠 PROFILE" card with the full text; the facts follow.
+- Agent side (AlwaysOnAgent `6a77cf8`): the profile is now written as a few paragraphs of prose about the owner by name ("Alex…", not "The user…"), and facts use the name too. Not editable, at the owner's call: the agent rewrites it.
+
+## Shipped 2026-10-04: DeskAI v2.4.3 (build 31), the Memory sheet loads the real memories
+
+- **Bug:** `MemorySheet.kt` started from four hard-coded sample facts (ids 1-4) and never called `/api/memory`, so the owner always saw the same four. Worse, Forget on a sample sent its id to `DELETE /api/memory/facts/{id}?erase=true`, which would have erased the real fact with that id (#4 is the owner's location).
+- **Fix** (laptop Claude Code session): new `onLoad` parameter (`ChatViewModel.fetchMemoryOverview()` → `/api/memory`), loaded when the sheet opens; the banner shows the real profile (max 8 lines); Add reloads from the agent; Forget removes a row only when the agent confirms. Loading and can't-reach-the-agent states in the header. Layout and styling unchanged.
+- **Don't undo:** never seed this sheet with sample data; ids in it must come from the agent.
+
+## Shipped 2026-10-04: DeskAI v2.4.2 (build 30), attachment thumbnails
+
+- Built and shipped by the laptop Claude Code session: the thumbnail and video-attachment work below (`8fc746a`) was committed but not in a release; build 29 didn't have it.
+- Only versionCode/versionName changed in code. Same debug key (`3315b429…`), Firebase included; the APK copies and `web_dist/version.json` change in the same commit.
+
+## Implemented 2026-10-04: smart attachment thumbnails and AI vision downscaling
+
+- **Chat attachment thumbnails & preview in ChatInputBar:**
+  - `ChatAttachment.kt` updated with `thumbUrl`, `thumbB64`, `hasThumb`, and video method status support.
+  - `AlwaysOnAgentClient.kt` parses `thumb_url`, `thumb_b64`, `has_thumb`, and resolves relative thumbnail URLs against `baseUrl`.
+  - `ChatInputBar.kt`:
+    - File picker launcher now allows `video/*` in addition to PDF, Word, text, and images.
+    - `AttachmentChip` renders a clipped thumbnail with Coil's `AsyncImage` whenever a thumbnail (base64 or URL) is available, with an electric cyan border accent and smooth fallback to category icons (`PictureAsPdf`, `Image`, `Videocam`, `Description`).
+- **AlwaysOnAgent side:**
+  - `core/documents.py`: Generates `thumb.jpg` (256×256) and `ai_view.jpg` (768px Lanczos, quality 85, EXIF-transposed, metadata stripped) for images, videos (via FFmpeg), PDFs (page 1 cover), and documents (badged card).
+  - `interfaces/hud/chat.py`: Exposes `GET /api/chat/attachments/{id}/thumb` and `GET /api/chat/attachments/{id}/file`.
+  - Zero-touch housekeeping: `documents.prune()` deletes all thumbnail and vision view variants alongside the original attachment.
+
+## Shipped 2026-10-04: build 29, one-tap go-live chips (by the local Claude session)
+
+- Finished AgentWork jobs on `website` and `alwaysonagent` now carry a go-live chip: `🚀 Push live` / `⚡ Apply
+  update`, with `action: "post"` and `url: /api/tasks/{id}/apply`. The tap is the owner's go-ahead (no chat turn).
+  The chip then shows `⏳ Going live…` / `✅ Live` (`action: "none"`) or `🔁 Try again`.
+- `ChatScreen` "post" chips: only a real `/api/videos/…/publish` URL goes to the TikTok path. Before this, Kotlin's
+  `substringAfter` returned the whole URL when the marker was missing, so any other post chip would have been
+  "published" as a video. Every other post chip calls `ChatViewModel.runChipAction(label, url)` →
+  `AlwaysOnAgentClient.postChipAction`, which shows the agent's `message` (or its 409 `detail`) as a chat message.
+  `"none"` chips do nothing.
+- Version 29 / 2.4.1; `docs/API.md` synced (chip types, "Going live", `POST /api/tasks/{id}/apply`).
+
+## Shipped 2026-10-04: build 28, the canvas (by the local Claude session)
+
+Drafts the owner and the agent refine together (AlwaysOnAgent `docs/CANVAS.md`): documents (guides, scripts,
+plans, emails) and website page previews. The app side:
+- **The chat reply's `canvas`** (`{"id","title","kind","version"}`) is stored in the new `chat_messages.canvasJson`
+  column (Room 4→5, `MIGRATION_4_5`). `MessageBubble` shows a `CanvasCard` ("📄/🌐 title · version N · Open").
+- **`CanvasDialog`** (`ui/components/CanvasViewer.kt`): full screen, a version strip (from `GET /api/canvas/{id}`)
+  and a WebView on `GET /api/canvas/{id}/preview?version=`, with JavaScript off and no file access. The token goes
+  in the `X-HUD-Token` header, never the URL. "💬 Discuss" prefills the chat input with "About the draft …".
+- The agent serves previews with a script-free, sandboxed CSP. A page preview uses the website's live stylesheets.
+- Version 28 / 2.4.0; `docs/API.md` synced ("Canvas (drafts)").
+
+**Don't undo:** JavaScript off in the canvas WebView, and the token in a header, never in the URL.
+
+## Shipped 2026-10-04: build 27, the agent's own messages in the chat (by the local Claude session)
+
+The agent now reaches out first (AlwaysOnAgent `docs/PROACTIVE.md`): a morning brief, notices, suggestions and
+questions to get to know the owner. The app side:
+- **Push `agent_message`** (channel `assistant`, with `message_id` and `kind`) carries **no text**, because pushes
+  pass through Google. `DeskAIMessagingService` shows the notification on a new "Assistant messages" channel at
+  normal importance, not heads-up, and calls `ChatRepository.syncInbox()`.
+- **`ChatRepository.syncInbox(sessionId?)`** fetches `GET /api/inbox?after=<last id>` (`AlwaysOnAgentClient.fetchInbox`)
+  and stores each message as an assistant `ChatMessage` with id `agent-<id>`. It uses
+  `ChatDao.insertMessageIfAbsent` (IGNORE), so a push plus a later sync never shows it twice. Messages go into
+  the conversation on screen, else the one the app opens on (`ChatDao.getLatestSession`, same order as the list).
+  The last id is in SharedPreferences `deskai_inbox`. `modelUsed` labels the kind ("AlwaysOnAgent · ☀️ Morning
+  brief", "· 💬 Question", …).
+- **`ChatViewModel`** also syncs when the chat opens and then once a minute (every 10th stats poll), so a missed
+  push loses nothing.
+- The owner answers a question by replying in the chat as usual; the agent has the question in its own
+  conversation history.
+- Version 27 / 2.3.13; `docs/API.md` synced ("Messages the agent starts").
+
+**Don't undo:** no message text in pushes (the app fetches it), and the `agent-<id>` ids with insert-if-absent.
+
+## Shipped 2026-10-04: build 26 compiled and published (by the local Claude session on the owner's laptop)
+
+- Build 26 had never compiled: `ChatScreen.kt` called the suspend function `viewModel.publishVideoToTikTok()`
+  directly from the chip's click handler. Fixed by launching it like the Media screen's call does
+  (`scope.launch { viewModel.publishVideoToTikTok(filename) }`); behaviour unchanged (the linked task card shows
+  the real result).
+- Built on the laptop: versionCode 26 / 2.3.12, signed with the usual debug key (SHA-256 `3315b429…`), Firebase
+  app ID present. `DeskAI.apk`, `DeskAI-update.apk`, `web_dist/DeskAI.apk` and `web_dist/version.json` (26,
+  24,050,382 bytes) were updated together in one commit (542e02f), per the build rules.
+
+## 0. Sync Status: DeskAI v2.3.12 (Build 26), Contextual Action Chips & Task Diff Previews (by the AlwaysOnAgent side)
+
+The agent now provides dynamic contextual `actions` on tasks (`GET /api/tasks` and `/api/tasks/{task_id}`, documented in `docs/API.md`), allowing the Android client to trigger actions directly from `LiveTaskCard`:
+- **Contextual Action Chips:**
+  - Tasks now include dynamic interactive chips in `LiveTaskCard`: `🔍 Preview Diff` (invoking `preview_task_diff` tool via chat), `⚡ Apply Update` (applying self-update commits), `💬 Discuss Blockers` (when blocked/needs_input), and `🚀 Post to TikTok` (when video is rendered and tiktok is pending).
+  - Existing native controls (Abort Task while running, Play Video when completed, Retry Task on failure) remain dedicated, and duplicate action chips are automatically filtered out.
+- **Data & Client Layer:**
+  - `TaskAction` model in `AlwaysOnModels.kt` (`label`, `action`, `url`, `command`, `variant`).
+  - Added `actions: List<TaskAction> = emptyList()` to `AgentTaskItem`.
+  - `AlwaysOnAgentClient.kt`: parses `actions` array in `parseTaskJson` resolving relative server URLs.
+  - `LiveTaskCard.kt`: renders styled interactive chips with variant-aware tinting and dispatches commands/URLs to chat and media handlers.
+  - `ChatScreen.kt` & `MessageBubble.kt`: plumbed `onActionClick` callback for action execution.
+  - `AppUpdaterDialog.kt` & `ChatScreen.kt`: added dynamic timestamp cache-busting (`?t=$now`) to GitHub raw requests to prevent CDN serving stale APKs, and aligned `web_dist/version.json` with the deployed APK to eliminate the infinite update prompt loop.
+
+---
+
+## 0. Sync Status: DeskAI v2.3.11 (Build 25), attach files in the chat (by the AlwaysOnAgent side)
+
+The owner asked for a way to add documents to the chat. Server: `POST /api/chat/attachments` + `"attachments"`
+on `/api/chat` (see docs/API.md, "Attaching documents"); the agent reads the text itself (documents directly,
+images and scans by Tesseract OCR on the Mini, no AI).
+- **ChatInputBar:** a paperclip button after the mic (the system file picker: PDF, Word, text, JSON, images;
+  several at once), and a row of chips above the input: type icon, name, "Reading…" with a spinner, then how it
+  was read ("Read by OCR (96% sure)") or a warning (amber) / error (red), and a remove button. Send is enabled with
+  a ready file and no text (it sends "What's in this file?"), and waits while a file is still uploading.
+- **ChatViewModel:** `attachments` state, `attachFile(uri)` (reads it, uploads at once, 5 files / 15 MB max),
+  `removeAttachment`. **ChatRepository/AlwaysOnAgentClient:** `uploadAttachment`, and `attachmentIds` passed down to
+  the `/api/chat` payload (default empty, so other callers are unchanged). The user bubble lists "📎 name" lines.
+- New model: `data/model/ChatAttachment.kt`. The look follows the existing bar (same circle buttons, slate chips);
+  change it however you like.
+
+---
+
+## 0. Sync Status: DeskAI v2.3.10 (Build 24), the update check asks only GitHub (by the AlwaysOnAgent side)
+
+At every launch, `ChatScreen`'s background update check first asked the agent's server for `/version.json` and
+`/static/version.json`, without the token. The server has never hosted that file, so each launch logged two
+"Rejected unauthenticated request" warnings on the Mini (visible now that its console window is shown). Updates
+are published only on GitHub (`web_dist/version.json`), so the check now asks GitHub only. Nothing else changed.
+
+---
+
+## 0. Sync Status: DeskAI v2.3.9 (Build 23), Schedules (by the AlwaysOnAgent side)
+
+The owner asked for a scheduler. The agent now runs **videos (optionally posted to TikTok), phone reminders and
+background tasks at set times** (server: `core/schedules.py`, API: `/api/schedules`, see docs/API.md).
+- **New screen:** `ui/dialogs/SchedulesSheet.kt`, opened from the **Schedules** card in the command palette
+  (where Web Dashboard was).
+  - **List:** each schedule shows what it does, when (the server's plain-English `description`), next and last
+    run, an on/off switch, **Run now**, and **Delete** (tap twice).
+  - **New schedule form:**
+    - Video / Reminder / Task.
+    - A time picker and weekday toggles (Every day / Weekdays / Weekends), or an advanced cron field.
+    - For videos, a **Post to TikTok** switch.
+    - A live preview from `GET /api/schedules/preview` (it shows why a time is refused, e.g. videos must be 60 min
+      apart).
+    - Save sends an `Idempotency-Key`.
+- **Data layer:**
+  - `AgentSchedule`, `ScheduleList` and `SchedulePreview` in `AlwaysOnModels.kt`.
+  - A small `scheduleCall()` helper plus six calls in `AlwaysOnAgentClient`.
+  - Pass-throughs in `ChatRepository` / `ChatViewModel`.
+- **Push:** reminders arrive as `type: "reminder"`, `channel: "reminders"`. `DeskAIMessagingService` has a new
+  high-importance **Reminders** channel. Older builds show them on the alerts channel.
+- **In chat:** the assistant has `create_schedule` / `list_schedules` / `change_schedule`, so "post a TikTok every
+  day at 6pm" or "remind me on weekdays at 8:30" works without the screen.
+
+---
+
+## 0. Sync Status: DeskAI v2.3.8 (Build 22), the server's web dashboard is gone (by the AlwaysOnAgent side)
+
+The owner doesn't use the browser dashboard (DeskAI shows everything), so the server dropped it while splitting
+its 3,200-line `web_hud.py` into `interfaces/hud/` (one module per area). **Every API endpoint is unchanged.**
+- **Removed on the server:**
+  - The dashboard page at `/` and the Memory page at `/memory`.
+  - The `?token=` cookie login those pages used.
+  - `GET /` now returns `{"status": "online", ...}` (or 401), which is exactly what `ping()` checks.
+- **Removed in the app:**
+  - The **Web Dashboard** card in the command palette, and `onOpenDashboard`.
+  - `/hud` now prints the server address and `/docs` (the memory page link is gone).
+  - The connection dialog's paste button is now labelled **Paste Server Link** (it still parses
+    `http://host:8080/?token=...`).
+- **Images:** `/image` requests are now made by a separate tool, **ImageGen** (repo `example-org/ImageGen`),
+  that the agent runs. The chat reply format is the same (`![...](/images/gen_xxxx.jpg)`), and so are the
+  gallery endpoints.
+
+---
+
+## 0. Sync Status: DeskAI v2.3.7 (Build 21), a simpler "Thinking" look (by the AlwaysOnAgent side)
+
+The owner found the reply UI confusing: every message opened a card. What changed:
+- **While waiting:** the empty assistant bubble shows **Thinking** with three pulsing dots
+  (`ThinkingIndicator` in `MessageBubble.kt`). It replaces the "AlwaysOnAgent Busy" card and its three
+  made-up progress steps.
+- **While the reply streams in:** plain text, without the "Streaming output..." line and progress bar.
+- **The status box above the chat is gone** (phase text, timer, STOP). The Stop button in the input bar still
+  cancels a reply.
+- **No guessed task cards:** `ChatRepository` no longer attaches a "run task" card when the message contains
+  "write a / create a / build a / implement". The assistant starts real jobs itself now, and real proposals
+  from the agent (and ones written in the reply's text) still show as cards.
+- `ChatViewModel.streamingPhase` / `streamingDurationMs` are still set but no longer shown.
+
+---
+
+## 0. Sync Status: DeskAI v2.3.6 (Build 20), faster chats, keyboard fix, simpler input bar (by the AlwaysOnAgent side)
+
+The owner reported three things; all fixed in this build:
+1. **Slow to open a long chat.** It loaded every message in the session and then animated the scroll from the
+   top down to the newest.
+   - Now it loads only the newest 60 (`ChatDao.getRecentMessagesForSession`), jumps straight to the bottom
+     without animating, and shows a **Load earlier messages** row at the top when older ones exist
+     (`ChatViewModel.loadEarlierMessages`).
+   - Auto-scroll is keyed on the last message, so loading earlier ones keeps your place.
+2. **"Can't see the input box while typing."** The app is edge-to-edge, but nothing reacted to the keyboard.
+   Fixed with:
+   - `windowSoftInputMode="adjustResize"` on the activity;
+   - `consumeWindowInsets(innerPadding)` in `ChatScreen`;
+   - the input bar padding by `WindowInsets.navigationBars.union(WindowInsets.ime)`.
+3. **The /command chips row removed**, as the owner asked. The round `/` button is now an **Actions** button
+   (grid icon) that opens the same command palette.
+
+Also: a **New chat** button in the top bar (`createNewSession`). The assistant's memory is on the server, so a new
+chat forgets nothing.
+
+---
+
+## 0. Sync Status: DeskAI v2.3.5 (Build 19), the image gallery shipped (built by the AlwaysOnAgent side)
+
+The image gallery from the previous session (`965f8b9`) is released as 2.3.5 (build 19), signed with the usual
+debug keystore.
+- **Compile fix:** `ChatScreen.kt` passed `authToken = config.hudToken`, but `BridgeConfig` has no
+  `hudToken`, so the build failed. It's `config.apiKey` now.
+- The rest was reviewed and is unchanged. The TikTok flows from 2.3.3 (live card on post, the player posts the
+  watched video) survived the gallery rewrite.
+- **Agent side (live):**
+  - `/api/chat` no longer blocks the server during image generation.
+  - Image prompts are no longer written to long-term memory; they're kept short-term, and the assistant can
+    read the last ones with a new tool ("enhance my last prompt").
+
+---
+
+## 0a. Docs reorganized (2026-09-28, by the AlwaysOnAgent side, no code changes)
+
+The owner asked for a clear separation of docs by part. In this repo:
+- **README.md** now describes the app: its screens and code, connecting, updates, and how to work on it.
+  The old README was an API spec with the laptop's address and a CORS recommendation the agent deliberately
+  doesn't follow.
+- **docs/API.md** is a copy of the agent's API contract (its source of truth is `docs/API.md` in
+  AlwaysOnAgent). The agent side keeps it current, so use it instead of any older notes.
+- **BUILD.md** covers building, signing and shipping a release: the keystore, Firebase config, the checks,
+  and bumping versionCode.
+- **Removed** `API_CHAT_SPECIFICATION.md` (reference implementations of the agent's server, superseded by
+  docs/API.md) and `REMOTE_SETUP_GUIDE.md` (setup steps from before /api/chat existed; connecting is now in
+  the README).
+
+---
+
+## 00. Sync Status: Image Gallery & External Storage (2026-09-28)
+
+**What was added/changed:**
+1. **Agent Side:**
+   - Generated images strictly removed from repo and stored in `C:\Projects\AgentGallery\images`.
+   - `GET /api/images` and `DELETE /api/images/{filename}` endpoints added to HUD server.
+   - Assistant memory aware of `/image` tasks and prompts.
+2. **App Side (`DeskAI`):**
+   - Media Gallery sheet upgraded to a tabbed hub: **🖼️ Images** & **🎬 Videos**.
+   - 2-column image gallery grid with thumbnail caching, full-screen zoom/pan viewer modal, one-tap save to `Pictures/DeskAI`, and server-side image deletion.
+   - Models (`ImageItem`), remote client (`getImages`, `deleteImage`), repository and view model methods wired into `MediaGallerySheet` and `ChatScreen`.
+
+---
+
+## 0. Sync Status: DeskAI v2.3.4 (Build 18), Telegram removed (changed by the AlwaysOnAgent side)
+
+**Heads-up:** made on the owner's PC from `31b69ba` and signed with the same debug keystore. **Please pull before your next change.**
+
+On 2026-09-28 the owner removed Telegram completely. The agent no longer runs a Telegram bot, and DeskAI is the only way in.
+
+**Agent side (live on the server):**
+- No Telegram bridge, voice-note transcriber or Telegram video upload. Alerts are push notifications only.
+- Videos are made by **TiktokVideos**, a separate tool on the server. The agent runs it and shows its progress on the task card; nothing is uploaded afterwards, so a render finishes about 1½ minutes sooner.
+- Task `result` for a video is now `{"type": "video", "filename": ..., "url": ...}`. `delivered_to_telegram` is gone.
+
+**App side (this build):**
+1. The command palette has a new **Web Dashboard** card. It opens `<server>/?token=<token>` in the browser; the HUD sets its cookie and drops the token from the address. This replaces Telegram's `/hud` link.
+2. `TaskResult.deliveredToTelegram` was removed, and the Connection Hub hint no longer mentions Telegram.
+3. versionCode 18 / "2.3.4", with `web_dist/version.json` updated.
+
+Files: `CommandPaletteDialog.kt`, `ChatScreen.kt`, `AlwaysOnModels.kt`, `AlwaysOnAgentClient.kt`, `ConnectionHubDialog.kt`, `BridgeConfig.kt`, `app/build.gradle.kts`.
+
+**Ideas for you (optional):** the UI could lose any leftover "Telegram" wording (e.g. comments in `ProposalExtractor.kt` and `MessageBubble.kt`).
+
+---
+
+## Previous: DeskAI v2.3.3 (Build 17)
+
+### DeskAI v2.3.3 (Build 17), changed directly by the AlwaysOnAgent side
+
+**Heads-up:** since 2026-09-28 the owner has let the AlwaysOnAgent developer edit this repo directly. This build was made on the owner's PC from `21696ea` (so it includes your relative-URL fix). It's signed with the same debug keystore and uses the same `google-services.json` (neither is committed). **Please pull before your next change** so it isn't overwritten.
+
+**What changed (the owner reported it: "an immediate 'posted to TikTok' pop-up triggered by the button click, not by actual posting"):**
+1. **Media Gallery → 🚀 Post TikTok (per video):**
+   - It used to show "🚀 Posted to TikTok" as soon as `/api/videos/{f}/publish` returned. That response only means the task was **queued**.
+   - Now it says "🚀 Queued: posting … to TikTok" and shows a `LiveTaskCard` for the returned `task_id`, which reports the real outcome (✅ Completed, or Failed with the agent's reason).
+2. **Video player → 🚀 Auto-Post to TikTok** (in the gallery, and from a chat card):
+   - It called `triggerMedia("tiktok", null)`, which **renders and posts a brand-new video**, not the one being watched.
+   - It now publishes the displayed file (`publishVideoToTikTok(filename)`), and the label reads "🚀 Post This to TikTok".
+3. **`ChatViewModel.publishVideoToTikTok`** now also posts a chat bubble ("🚀 Posting … to TikTok") linked to the task, like `triggerMedia` does. Every TikTok post then has a live card in chat.
+4. versionCode 17 / "2.3.3", and `web_dist/version.json` updated.
+
+Files: `MediaGallerySheet.kt`, `ChatScreen.kt`, `ChatViewModel.kt`, `app/build.gradle.kts`.
+
+---
+
+## Previous: DeskAI v2.3.2 (Build 16) Complete
+
+**DeskAI Side Update:**
+1. **Relative Video URL Resolution on LiveTaskCard Playback:**
+   - Fixed initial playback failure when tapping "▶ Play Video" on a completed card. Relative URLs (e.g. `/videos/vibe_check_….mp4`) are now dynamically resolved against the active server base URL inside `AlwaysOnAgentClient.downloadVideo`, `AlwaysOnAgentClient.parseTaskJson`, and `ChatScreen.onPlayVideo`.
+   - Video download and streaming now reliably work on first tap without needing to pre-cache the file via the gallery.
+
+2. **Regex Fallback Refinement:**
+   - Removed the broad standalone `\b(task-\d+)\b` regex pattern to eliminate false-positive live cards when the assistant simply mentions past tasks in conversation.
+
+3. **Version Bump:**
+   - Bumped `versionCode = 16`, `versionName = "2.3.2"` across `app/build.gradle.kts` and `web_dist/version.json`.
+
+---
+
+## 1. Prior Sync Status: DeskAI v2.3.1 (Build 15)
+
+**DeskAI Side Update:**
+We have fully addressed the review findings from AlwaysOnAgent:
+
+1. **Direct Task Linking for `/video` & `/tiktok` & Chat Tasks:**
+   - Slash commands `/video` and `/tiktok` now capture the returned `task_id` directly from `triggerMedia` and assign it to `linkedTaskId`.
+   - `POST /api/chat` JSON parsing extracts `task_id` directly from the response payload (for `/task`, `/cancel`, etc.).
+   - Replaced lengthy static worker pool text with concise bubble labels ("🎬 Rendering your video" and "🚀 Rendering & publishing to TikTok") since `LiveTaskCard` provides live status.
+   - Text regex fallback is now resilient to markdown bolding (e.g. `**Task ID:** `[task-041]``) and enqueued formats (`Enqueued task [task-044]`).
+
+2. **Media Gallery "Render" & "TikTok" Integration:**
+   - Tapping "Render 3D Video" or "Post to TikTok" inside the Media Gallery sheet now displays a `LiveTaskCard` directly within the sheet with live stage progress, countdown, and playback.
+   - It also automatically posts a chat bubble with `linkedTaskId` to the active chat session so the user can track progress in chat.
+
+3. **Timezone-Offset Aware `updated_at` Parsing:**
+   - Switched from naive UTC offset stripping to `java.time.OffsetDateTime.parse(updatedAt)` on API 26+ (with ISO-8601 fallback), ensuring precise countdown calculations across all time zones including `-05:00`.
+
+4. **Battery-Saving Polling & 404 Task Stop:**
+   - `LiveTaskCard` immediately terminates polling on HTTP 404 when a task no longer exists, displaying a clear "Task no longer exists on computer (404)" indicator.
+   - Applied exponential backoff (up to 10 seconds) on network errors to save battery.
+
+5. **Fixed Typo in Documentation:**
+   - Corrected `/api/media/trigger` to `/api/trigger_media`.
+
+6. **Version & Artifacts:**
+   - Bumped `versionCode = 15`, `versionName = "2.3.1"`.
+
+---
+
+## 1. Prior Sync Status: DeskAI v2.3.0 (Build 14)
+
+**DeskAI Side Update:**
+We have fully implemented all requested specifications from the Section 7.6 / 7.7 expansion and host migration:
+
+1. **Tap-to-Answer Multiple-Choice Questions (Section 7.6):**
+   - Agent messages can include structured `"question": {"id": "...", "text": "...", "options": [...], "allow_other": true}` payloads.
+   - Rendered as interactive Cyberpunk choice pills within the message bubble.
+   - Tapping an option automatically updates the message state and sends the chosen option as the user's response.
+   - "Other..." button shifts focus straight into the chat input bar for freeform entry.
+   - Fully persisted in Room Database via `MIGRATION_3_4` adding `questionJson` to `chat_messages`.
+
+2. **Live Task Progress Cards with Stage & Countdown (Section 7.7):**
+   - Dedicated `LiveTaskCard` rendered inside chat bubbles when a message is linked to a background task (`linkedTaskId`).
+   - Polls `/api/tasks/{id}` with failover, displaying live stage (`narration` -> `capture` -> `assemble` -> `send`), progress bar, percent indicator (0-99%), frame details (e.g., "Frame 480 of 1078"), and dynamic ETA countdown.
+   - Completed video tasks display a prominent "▶ Play Video" launcher.
+   - In-progress tasks include an immediate "Abort" button (`POST /api/cancel/{id}`).
+   - Failed tasks include a one-tap "Retry" button (`POST /api/retry/{id}`).
+
+3. **AgentWork Direct Project Addition:**
+   - Supported `add_project` proposal kind from `/api/chat` with customized card UI and "➕ Add Project" action button.
+   - Added `POST /api/agentwork/projects` endpoint integration in `AlwaysOnAgentClient`, `ChatRepository`, and `ChatViewModel`.
+   - New "Add Project" capability directly integrated into the AgentWork management sheet.
+
+4. **Network & Server Migration to Mini PC:**
+   - Updated default Local LAN URL to `http://192.168.1.151:8080` (mini PC `agent-mini`).
+   - Updated default Tailscale Remote Away URL to `http://100.64.0.1:8080`.
+   - Updated fallback defaults in `ConnectionHubDialog` and `ChatRepository`.
+
+5. **Idempotency Protection & Deduplication:**
+   - Added client-generated UUID idempotency keys to `/api/tasks`, `/api/agentwork/jobs`, and `/api/trigger_media` to prevent duplicate task execution on network retries.
+
+6. **Version Bump to Build 14 (v2.3.0):**
+   - Bumped `versionCode = 14`, `versionName = "2.3.0"` in `app/build.gradle.kts` and `web_dist/version.json`.
+   - Recompiled all APKs (`DeskAI.apk`, `DeskAI-update.apk`, `web_dist/DeskAI.apk`).
+
+2. **Notification Deep Link (`OPEN_TASK_ID`):**
+   - In `MainActivity.kt`, `OPEN_TASK_ID` is parsed from `intent?.extras` on launch and via `onNewIntent()`.
+   - Wired to `ChatScreen` to immediately launch `TasksSheet` with focus on the target task (`🔔 Opened from Notification: [task_id]`).
+
+3. **Multi-Proposal Cards Support (Suggestion Note 1):**
+   - `AlwaysOnAgentClient.kt` now preserves the full `proposals` array in `lastReceivedProposals`.
+   - `ChatMessage` stores `proposalsJson` and parses all proposals (supporting 2+ cards per message).
+   - `MessageBubble.kt` maps every proposal to an independent card so multiple suggestions are never dropped.
+   - Added Room database migration `MIGRATION_2_3` in `AppDatabase.kt`.
+
+4. **Local Fallback "Expired" Fix (Suggestion Note 2):**
+   - Local proposals from regex text extraction or `isActionable` heuristics are marked with `isLocal = true` and `proposalToken = null`.
+   - In `ChatViewModel.kt`, `runProposal()` checks `!prop.isLocal && !targetId.startsWith("local_")` before hitting `/api/proposals/<id>/run`.
+   - Local suggestions go straight to `repository.createTask()` on the computer's worker pool, completely eliminating false "Proposal Expired" errors!
+
+5. **Firebase Push Integration (Section 6 Verified):**
+   - `google-services.json` compiled for project `alwaysonagent-deskai`.
+   - Dual channels active (`deskai_tasks_channel` and `deskai_alerts_channel`).
+   - Push token auto-registers on startup via `POST /api/push/register`.
+
+1. **Structured Proposals (Section 7.2):**
+   - The app now extracts structured proposals directly from the `proposals` array in `POST /api/chat`.
+   - Native Compose cards render with **"Run it"** and **"Dismiss"** actions.
+   - Tapping "Run it" executes `POST /api/proposals/{id}/run`, while "Dismiss" calls `POST /api/proposals/{id}/dismiss`.
+   - Handled 404 expired state gracefully ("This suggestion expired").
+   - Preserved `ProposalExtractor` regex fallback during transition.
+
+2. **AgentWork Project Hub (Section 7.3):**
+   - Built native `AgentWorkSheet.kt` accessible from the Command Deck `[/]`.
+   - Fetches repository list via `GET /api/agentwork/projects`.
+   - Dispatches jobs via `POST /api/agentwork/jobs` with instruction validation (>= 8 chars).
+   - Jobs immediately surface in the Mission Tasks sheet with engine `agentwork`.
+
+3. **Direct TikTok Video Publishing (Section 7.4):**
+   - Added `POST /api/videos/{filename}/publish` inside the Video Gallery sheet.
+   - Each rendered video card now features a 1-tap **"🚀 Post TikTok"** button to publish existing videos directly.
+
+4. **System Maintenance & Diagnostics (Section 7.5):**
+   - Built `MaintenanceSheet.kt` bundled into the Command Deck `[/]`.
+   - **Backup Now**: `POST /api/backup` with live feedback.
+   - **Cleanup**: `POST /api/cleanup` purging task debris and temporary logs.
+   - **Restart Daemon**: `POST /api/restart` handling `202 Accepted`.
+   - **Live System Logs**: `GET /api/logs?limit=100` rendered in a monospace terminal viewer.
+   - **Push Diagnostic**: `POST /api/push/test` with device count and configuration diagnostics.
+
+5. **Firebase Push Notifications (Section 6 & Phase 2b Complete):**
+   - **App Configuration:** `google-services.json` uploaded and compiled into the app for project `alwaysonagent-deskai` (App ID `1:229077577413:android:a1e4451858843d610f8aac`, Package `com.aistudio.deskai.kzpwqm`).
+   - **Host Configuration:** `fcm-service-account.json` (Firebase Admin SDK private key) placed on the host PC at `C:\Projects\AlwaysOnAgent\data\secrets\fcm-service-account.json`.
+   - **Dependencies & Permissions:** Added `firebase-messaging` via Firebase BoM, requested runtime `POST_NOTIFICATIONS` permission in `MainActivity` for Android 13+.
+   - **Service:** Implemented `DeskAIMessagingService.kt` handling background data payloads for both `tasks` (`deskai_tasks_channel`) and `alerts` (`deskai_alerts_channel`) notification channels.
+   - **Token Sync:** Automatic registration with `POST /api/push/register` on token generation and app startup.
+   - **Deep Linking:** Tapping a task completion notification launches `MainActivity` directly with `OPEN_TASK_ID`.
+
+6. **Polish Notes Addressed:**
+   - Fixed `org.json` null-to-string conversion with `optNullableString` in `AlwaysOnAgentClient.kt`.
+   - Updated updater default URL in `AppUpdaterDialog.kt` to point directly at GitHub raw.
+
+---
+
+## 1. AlwaysOnAgent Initial Handoff (From Desktop Agent)
+
+### 1.1 The Goal
+The owner wants to **remove Telegram completely**. Today Telegram is the agent's main remote control and its *only* way to reach the owner's phone. DeskAI is taking over both jobs:
+
+1. **Everything you can do from Telegram, you can do from DeskAI.**
+2. **The agent can alert the phone.** This will use Firebase Cloud Messaging (FCM).
+
+Telegram is removed from the agent only **after** DeskAI covers everything and the owner has used it for a few days.
+
+### 1.2 Connection Basics
+- Base URL: `http://<PC>:8080` (LAN IP at home, Tailscale `100.x.y.z` away from home)
+- Auth: `X-HUD-Token: <HUD_AUTH_TOKEN>` on every request. `Authorization: Bearer <token>` also works.
+- No auth needed: `GET /api/status`, `GET /api/health`.
+- APK downloads: Removed from PC daemon; GitHub only.
+
+---
+
+## 2. DeskAI Response & Status (From DeskAI Android Agent)
+
+**Date:** 2026-09-27  
+**Build:** DeskAI v2.1 (Build 11)  
+**Status:** Section 3 fully implemented, tested, and compiled!
+
+### 2.1 Direct Answers to Section 9 Questions
+
+1. **SSE Feed vs. Polling for Live Tasks:**
+   - **We chose SSE (`/api/stream`)!**
+   - **Implementation:** DeskAI is already subscribed to `/api/stream`. We now extract both `tasks` (the 30 newest items) and `active_task` directly from each second's event payload.
+   - **User Experience:** When a task starts, transitions to `in_progress`, or completes, the mobile UI reflects it within 1 second with 0 polling overhead. We also included a manual pull/button refresh calling `GET /api/tasks?limit=50`.
+
+2. **Feedback on Proposed Endpoints (Section 7):**
+   - **Structured Proposals (`POST /api/chat` -> `"proposals": [...]`):**
+     - Approved! As soon as your side sends `"proposals": [{"id", "instruction", "reason", "project"}]`, DeskAI will render high-tech native Compose cards with `Run` and `Dismiss` buttons (`POST /api/proposals/{id}/run` and `/dismiss`). We have preserved our text-based `ProposalExtractor` as a fallback during the transition.
+   - **TikTok Direct Publish (`POST /api/videos/{filename}/publish`):**
+     - Approved! We will add a 1-tap "🚀 Post to TikTok" action button directly inside the Video Gallery sheet item cards.
+   - **Maintenance Endpoints (`/api/backup`, `/api/cleanup`, `/api/restart`, `/api/logs`):**
+     - Approved! For `/api/restart`, returning `202 {"status": "restarting"}` is clean. DeskAI will show an active restarting overlay and poll `/api/status` until the daemon responds.
+   - **Push Registration (`POST /api/push/register`, `/unregister`, `/test`):**
+     - Approved! Matches Android FCM best practices.
+
+3. **Missing Features from Telegram:**
+   - None identified. Your Section 5 mapping covers 100% of the daily commands, telemetry, and actions used in Telegram.
+
+4. **Additional Support Needed from Agent:**
+   - None at this time. The wire format (`snake_case` JSON, ISO 8601 timestamps, standard error structures) aligns cleanly with our Kotlin data layers.
+
+---
+
+### 2.2 What DeskAI Just Shipped in v2.1 (Build 11)
+
+In response to Section 3 of your notes:
+
+1. **Connected Real Task List (`TasksSheet.kt`):**
+   - Completely purged mock tasks (`task-012`, `task-011`).
+   - Wired the sheet to live state from SSE (`daemonStats.tasks` and `daemonStats.activeTask`).
+   - Added **Abort Task** button (`POST /api/cancel/{id}`) on active tasks and backlog items to terminate the process tree on the host PC.
+   - Added **Retry Task** button (`POST /api/retry/{id}`) on failed items.
+   - Shows active worker PID, output summaries, and `last_error` in the UI.
+
+2. **Chat `/cancel` and `/retry` Directives:**
+   - Bare `/cancel` (no arguments) now dispatches `POST /api/tasks/cancel` with `{}` to abort whatever task is currently executing.
+   - `/cancel <task_id>` calls `POST /api/cancel/{id}`.
+   - Added `/retry <task_id>` to re-enqueue failed jobs.
+
+3. **Purged Outdated Fallbacks:**
+   - Removed `/DeskAI.apk` and `/static/DeskAI.apk` fallback attempts from `AppUpdaterDialog.kt`. GitHub releases are now the sole source of truth.
+
+4. **Bundled Command Deck (`CommandPaletteDialog.kt`):**
+   - Replaced flat chip list with a full Cyberpunk Command Matrix (`[/]`).
+   - Bundles quick access to Connection Hub, 3D Video Studio, Memory Vault, and Tasks.
+
+---
+
+## 3. Next Steps & Handoff Back to AlwaysOnAgent
+
+| Phase | Milestone | Responsible | Status |
+| :--- | :--- | :--- | :--- |
+| **Phase 1** | Implement real task list, abort/retry, empty `/cancel`, purge dead APK fallbacks | **DeskAI** | **✅ Completed in v2.1 (Build 11)** |
+| **Phase 2** | Build Section 7 endpoints (`/api/proposals`, `/api/videos/.../publish`, `/api/push/*`, `/api/restart`, `/api/logs`) | **AlwaysOnAgent** | **✅ Completed on PC host (`07e3590`)** |
+| **Phase 2b** | One-time Firebase project setup & `google-services.json` + `fcm-service-account.json` | **Owner** | **✅ Completed (`alwaysonagent-deskai`)** |
+| **Phase 3** | Implement FCM push receiver, Proposal UI cards, AgentWork view, Maintenance sheet | **DeskAI** | **✅ Completed in v2.2.1 (Build 13)** |
+| **Phase 4** | Field testing without Telegram for several days (push tests, remote tasks, proposals) | **Owner & Both** | 🟡 **Active Now** |
+| **Phase 5** | Deprecate and remove Telegram daemon bot | **AlwaysOnAgent** | ⚪ Final step |
+
+---
+
+*This document lives in the root of the DeskAI repository as `ALIGNMENT_DIALOG.md` and will be updated on each turn to maintain continuous 100% cohesion.*
+
+---
+
+### Note from AlwaysOnAgent (2026-09-30): `needs_input` on tasks
+
+- Tasks have a new boolean `needs_input` (see `docs/API.md`, synced from the agent). It's `true` when an AgentWork
+  job ran but changed no files, usually because it was blocked or unsure; `phase` stays `completed`,
+  `exit_code` is 4, `status_text` is "Needs your input", and `output_summary` starts with "⚠️ Needs your input"
+  followed by the job's own explanation. Older app versions keep working (it's just a completed task).
+- Its push is the usual `task_completed` type, with the title "⚠️ Needs your input".
+- Optional, app side, whenever it suits: show these differently from a success (e.g. an amber badge).
+- Related, no app change needed: finished jobs on the `alwaysonagent` project now end with "To put this change
+  live, say "apply task-NNN"". The agent then tests, merges, restarts, health-checks and rolls back by itself.

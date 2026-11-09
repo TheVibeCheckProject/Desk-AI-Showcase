@@ -1,0 +1,93 @@
+package com.example.data.model
+
+import android.net.Uri
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "bridge_config")
+data class BridgeConfig(
+    @PrimaryKey val id: Int = 1,
+    val serverUrl: String = "http://192.168.1.151:8080", // Home / Local LAN URL (mini PC agent-mini)
+    val remoteUrl: String = TAILNET_HTTPS,                // Tailscale, HTTPS (tailscale serve on the Mini)
+    val useRemoteWhenAway: Boolean = true,
+    val protocol: String = BridgeProtocol.ALWAYSON_AGENT.name,
+    val apiKey: String = "",                         // Matches HUD_AUTH_TOKEN
+    val selectedModel: String = "auto",
+    val customPath: String = "",
+    val streamResponse: Boolean = true,
+    val temperature: Float = 0.7f,
+    val lastPingSuccess: Boolean = false,
+    val lastPingMs: Long = 0L,
+    val lastPingTimestamp: Long = 0L
+) {
+    /**
+     * Returns the active endpoint URL. If remoteUrl is set and enabled, or if target is remote,
+     * it chooses the appropriate URL with trailing slashes stripped.
+     */
+    fun getResolvedUrl(preferRemote: Boolean = false): String {
+        return if (preferRemote && remoteUrl.isNotBlank()) {
+            remoteUrl.trim().removeSuffix("/")
+        } else if (serverUrl.isNotBlank()) {
+            serverUrl.trim().removeSuffix("/")
+        } else if (remoteUrl.isNotBlank()) {
+            remoteUrl.trim().removeSuffix("/")
+        } else {
+            "http://192.168.1.151:8080"
+        }
+    }
+
+    companion object {
+        /**
+         * The Mini over Tailscale with HTTPS (2026-10-27: `tailscale serve`, tailnet only, a real certificate). The
+         * token crossed the home Wi-Fi in plain HTTP before; the LAN address stays as the fallback.
+         */
+        const val TAILNET_HTTPS = "https://agent-mini.example.ts.net"
+        private const val OLD_TAILNET_HTTP = "http://100.64.0.1:8080"
+
+        /** The old plain-HTTP Tailscale address becomes the HTTPS one; anything the user typed stays as it is. */
+        fun upgradeRemote(url: String): String =
+            if (url.trim().removeSuffix("/") == OLD_TAILNET_HTTP) TAILNET_HTTPS else url
+
+        /**
+         * Parses a quick-import server link (with an optional ?token=):
+         * "http://192.168.1.45:8080/?token=abc123xyz" -> ("http://192.168.1.45:8080", "abc123xyz")
+         */
+        fun parseImportUrl(raw: String): Pair<String, String?> {
+            val trimmed = raw.trim()
+            return try {
+                val uri = Uri.parse(trimmed)
+                val token = uri.getQueryParameter("token")
+                val cleanUrl = if (uri.scheme != null && uri.host != null) {
+                    val portPart = if (uri.port != -1) ":${uri.port}" else ""
+                    "${uri.scheme}://${uri.host}$portPart"
+                } else {
+                    trimmed.substringBefore("?")
+                }
+                Pair(cleanUrl, token)
+            } catch (_: Exception) {
+                Pair(trimmed.substringBefore("?"), null)
+            }
+        }
+        fun normalizeUrl(raw: String, defaultPort: Int = 8080): String {
+            var s = raw.trim()
+            if (s.isBlank()) return ""
+            // Automatically correct accidental 5-octet typo 192.168.1.2.246 -> 192.168.1.246
+            if (s.contains("192.168.1.2.246")) {
+                s = s.replace("192.168.1.2.246", "192.168.1.246")
+            }
+            if (!s.startsWith("http://") && !s.startsWith("https://")) {
+                s = "http://$s"
+            }
+            val scheme = s.substringBefore("://")
+            val withoutScheme = s.substringAfter("://")
+            val hostPart = withoutScheme.substringBefore("/")
+            val pathPart = if (withoutScheme.contains("/")) "/" + withoutScheme.substringAfter("/") else ""
+            val finalHost = if (!hostPart.contains(":") && !hostPart.contains("trycloudflare.com")) {
+                "$hostPart:$defaultPort"
+            } else {
+                hostPart
+            }
+            return "$scheme://$finalHost$pathPart".removeSuffix("/")
+        }
+    }
+}
